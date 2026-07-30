@@ -21,6 +21,16 @@ La API mantiene la lógica de negocio en servicios/casos de uso y dejará los co
 
 Swagger estará disponible en `http://localhost:3000/docs`.
 
+También puedes ejecutar la aplicación completa con las imágenes de producción:
+
+```bash
+docker compose --profile app up --build
+```
+
+La SPA quedará en `http://localhost:5173` y la API en
+`http://localhost:3000`. PostgreSQL, migraciones y seed se preparan
+automáticamente dentro de Compose.
+
 ## Calidad
 
 Los comandos de validación son:
@@ -47,3 +57,10 @@ falla si cualquiera de las cuatro métricas queda por debajo.
 - Nunca confirmes archivos `.env`, claves, tokens ni datos de tarjeta.
 - Usa únicamente el entorno sandbox de la pasarela.
 - Producción usará un gestor de secretos; no archivos de entorno versionados.
+
+## Infraestructura
+
+La definición de AWS y su secuencia segura están en
+[`infra/README.md`](infra/README.md). Terraform crea CloudFront/S3, ECS
+Fargate/ECR, RDS PostgreSQL privado, red, logs y Secrets Manager. No se debe
+ejecutar `terraform apply` sin aprobación explícita de costos.

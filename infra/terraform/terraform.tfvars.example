@@ -1,0 +1,10 @@
+project_name               = "checkout-lab"
+environment                = "prod"
+aws_region                 = "us-east-1"
+api_image_tag              = "latest"
+api_desired_count          = 0
+db_instance_class          = "db.t4g.micro"
+db_allocated_storage       = 20
+db_multi_az                = false
+enable_deletion_protection = true
+cloudfront_price_class     = "PriceClass_100"

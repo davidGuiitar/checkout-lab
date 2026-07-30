@@ -3,6 +3,9 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 
 export function configureApp(app: INestApplication): void {
+  const apiPrefix = process.env.API_PREFIX?.replace(/^\/|\/$/g, '');
+  if (apiPrefix) app.setGlobalPrefix(apiPrefix);
+
   app.use(helmet());
   app.enableCors({
     origin: process.env.FRONTEND_URL ?? 'http://localhost:5173',
@@ -22,7 +25,7 @@ export function configureApp(app: INestApplication): void {
     .setVersion('1.0')
     .build();
   SwaggerModule.setup(
-    'docs',
+    apiPrefix ? `${apiPrefix}/docs` : 'docs',
     app,
     SwaggerModule.createDocument(app, swaggerConfig),
   );

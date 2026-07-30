@@ -1,8 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient()
 
-async function main(): Promise<void> {
+try {
   await prisma.product.upsert({
     where: { slug: 'audifonos-inalambricos' },
     update: {},
@@ -14,12 +14,7 @@ async function main(): Promise<void> {
       stock: 10,
       isFeatured: true,
     },
-  });
+  })
+} finally {
+  await prisma.$disconnect()
 }
-
-void main()
-  .then(async () => prisma.$disconnect())
-  .catch(async (error: unknown) => {
-    await prisma.$disconnect();
-    throw error;
-  });
