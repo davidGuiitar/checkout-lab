@@ -4,11 +4,15 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './database/prisma.module';
+import { CheckoutModule } from './checkout/checkout.module';
+import { ProductsModule } from './products/products.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    ProductsModule,
+    CheckoutModule,
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,

@@ -6,3 +6,67 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  VOIDED
+  ERROR
+}
+
+model Product {
+  id           String        @id @default(uuid())
+  slug         String        @unique
+  name         String
+  description  String
+  price        Int
+  stock        Int
+  isFeatured   Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+}
+
+model Customer {
+  id           String        @id @default(uuid())
+  fullName     String
+  email        String
+  phone        String
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+}
+
+model Delivery {
+  id            String        @id @default(uuid())
+  recipientName String
+  address       String
+  city          String
+  department    String
+  notes         String?
+  createdAt     DateTime      @default(now())
+  transactions  Transaction[]
+}
+
+model Transaction {
+  id                    String            @id @default(uuid())
+  reference             String            @unique
+  status                TransactionStatus @default(PENDING)
+  productId             String
+  customerId            String
+  deliveryId            String
+  productAmount         Int
+  baseFee               Int
+  deliveryFee           Int
+  total                 Int
+  providerTransactionId String?           @unique
+  failureReason         String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  product               Product           @relation(fields: [productId], references: [id])
+  customer              Customer          @relation(fields: [customerId], references: [id])
+  delivery              Delivery          @relation(fields: [deliveryId], references: [id])
+
+  @@index([status])
+  @@index([productId])
+}
