@@ -1,0 +1,104 @@
+{
+  "info": {
+    "_postman_id": "3f2e1878-50ab-4bee-a421-2a97e188c455",
+    "name": "Checkout Lab API",
+    "description": "Colección sin secretos ni datos de tarjeta. El token efímero debe obtenerse mediante el cifrado de la SPA o un mecanismo autorizado del sandbox.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "productId",
+      "value": "00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "key": "paymentToken",
+      "value": "tok_sandbox_from_tokenization"
+    },
+    {
+      "key": "transactionReference",
+      "value": "CHK-00000000-0000-4000-8000-000000000000"
+    }
+  ],
+  "item": [
+    {
+      "name": "Producto destacado",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/products/featured",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "products",
+            "featured"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Configuración pública",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/checkout/config",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "checkout",
+            "config"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Crear checkout",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"customer\": {\n    \"fullName\": \"Cliente de Prueba\",\n    \"email\": \"cliente@example.com\",\n    \"phone\": \"3000000000\"\n  },\n  \"delivery\": {\n    \"recipientName\": \"Cliente de Prueba\",\n    \"address\": \"Dirección de prueba\",\n    \"city\": \"Bogotá\",\n    \"department\": \"Cundinamarca\"\n  },\n  \"paymentToken\": \"{{paymentToken}}\",\n  \"installments\": 1,\n  \"acceptedTerms\": true,\n  \"acceptedPersonalData\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/checkout",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "checkout"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Recuperar transacción",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/transactions/{{transactionReference}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "transactions",
+            "{{transactionReference}}"
+          ]
+        }
+      }
+    }
+  ]
+}
