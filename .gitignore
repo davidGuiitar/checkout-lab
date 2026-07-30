@@ -1,0 +1,23 @@
+# System
+.DS_Store
+
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+.vite/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Tooling
+*.log
+.pnpm-store/
+*.tsbuildinfo
+
+# Infrastructure state
+.terraform/
+*.tfstate
+*.tfstate.*
