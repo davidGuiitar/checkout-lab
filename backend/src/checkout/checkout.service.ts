@@ -72,9 +72,8 @@ export class CheckoutService {
         data: { providerTransactionId: providerTransaction.id },
       });
       await this.finalize(localTransaction.id, providerTransaction.status);
-    } catch (error: unknown) {
+    } catch {
       await this.finalize(localTransaction.id, 'ERROR');
-      if (error instanceof BadGatewayException) throw error;
       throw new BadGatewayException(
         'No fue posible completar la comunicación con la pasarela.',
       );

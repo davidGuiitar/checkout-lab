@@ -28,9 +28,19 @@ Los comandos de validación son:
 - `pnpm --dir frontend build`
 - `pnpm --dir frontend test:cov`
 - `pnpm --dir backend build`
+- `pnpm --dir backend lint`
 - `pnpm --dir backend test:cov`
+- `pnpm --dir backend test:e2e -- --runInBand`
 
-La meta de entrega es una cobertura real superior al 80% en frontend y backend. El resultado verificado se incorporará aquí al finalizar las pruebas.
+Cobertura global verificada con Jest el 30 de julio de 2026:
+
+| Aplicación | Statements | Branches | Functions | Lines |
+| --- | ---: | ---: | ---: | ---: |
+| Frontend | 90,57% | 86,74% | 89,41% | 93,25% |
+| Backend | 98,91% | 91,93% | 97,36% | 98,75% |
+
+Ambas configuraciones aplican un umbral global obligatorio de 80%; el comando
+falla si cualquiera de las cuatro métricas queda por debajo.
 
 ## Seguridad
 

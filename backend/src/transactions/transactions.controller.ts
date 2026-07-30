@@ -8,7 +8,10 @@ import {
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CheckoutResult, CheckoutService } from '../checkout/checkout.service';
 
-class ParseCheckoutReferencePipe implements PipeTransform<string, string> {
+export class ParseCheckoutReferencePipe implements PipeTransform<
+  string,
+  string
+> {
   transform(value: string): string {
     if (
       !/^CHK-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(

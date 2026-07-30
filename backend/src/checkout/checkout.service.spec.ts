@@ -1,4 +1,8 @@
-import { BadGatewayException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Product, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { CheckoutService } from './checkout.service';
@@ -100,6 +104,7 @@ describe('CheckoutService', () => {
     jest.clearAllMocks();
     process.env.PAYMENT_INTEGRITY_SECRET = 'test_integrity_not_a_secret';
     reserveProduct.mockResolvedValue([product]);
+    countProducts.mockResolvedValue(1);
     createLocalTransaction.mockResolvedValue(pendingTransaction);
     updateLocalStatus.mockResolvedValue({ count: 1 });
     findLocalTransaction.mockResolvedValue(pendingTransaction);
@@ -158,5 +163,123 @@ describe('CheckoutService', () => {
       where: { id: product.id },
       data: { reservedStock: { decrement: 1 } },
     });
+  });
+
+  it('polls a pending provider transaction and finalizes approval once', async () => {
+    createGatewayTransaction.mockResolvedValue({
+      id: 'provider-id',
+      status: 'PENDING',
+    });
+    getGatewayTransaction.mockResolvedValue({
+      id: 'provider-id',
+      status: 'APPROVED',
+    });
+    findTransactionByReference
+      .mockResolvedValueOnce({
+        ...pendingTransaction,
+        providerTransactionId: 'provider-id',
+        product,
+      })
+      .mockResolvedValueOnce({
+        ...pendingTransaction,
+        providerTransactionId: 'provider-id',
+        status: TransactionStatus.APPROVED,
+        product: { ...product, stock: 0, reservedStock: 0 },
+      });
+
+    await expect(
+      new CheckoutService(prisma, gateway).create(dto),
+    ).resolves.toMatchObject({ status: TransactionStatus.APPROVED });
+    expect(getGatewayTransaction).toHaveBeenCalledWith('provider-id');
+    expect(updateProduct).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases reserved inventory for a declined payment', async () => {
+    createGatewayTransaction.mockResolvedValue({
+      id: 'provider-id',
+      status: 'DECLINED',
+    });
+    findTransactionByReference.mockResolvedValue({
+      ...pendingTransaction,
+      providerTransactionId: 'provider-id',
+      status: TransactionStatus.DECLINED,
+      product: { ...product, reservedStock: 0 },
+    });
+
+    await expect(
+      new CheckoutService(prisma, gateway).create(dto),
+    ).resolves.toMatchObject({ status: TransactionStatus.DECLINED });
+    expect(updateProduct).toHaveBeenCalledWith({
+      where: { id: product.id },
+      data: { reservedStock: { decrement: 1 } },
+    });
+  });
+
+  it('distinguishes a missing product from sold-out inventory', async () => {
+    reserveProduct.mockResolvedValue([]);
+    countProducts.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+    const service = new CheckoutService(prisma, gateway);
+
+    await expect(service.create(dto)).rejects.toThrow(NotFoundException);
+    await expect(service.create(dto)).rejects.toThrow(ConflictException);
+    expect(createGatewayTransaction).not.toHaveBeenCalled();
+  });
+
+  it('maps unexpected provider failures without exposing their details', async () => {
+    createGatewayTransaction.mockRejectedValue(
+      new Error('provider implementation detail'),
+    );
+
+    await expect(
+      new CheckoutService(prisma, gateway).create(dto),
+    ).rejects.toThrow(
+      'No fue posible completar la comunicación con la pasarela.',
+    );
+  });
+
+  it('returns terminal transactions without querying the provider', async () => {
+    findTransactionByReference.mockResolvedValue({
+      ...pendingTransaction,
+      status: TransactionStatus.APPROVED,
+      providerTransactionId: 'provider-id',
+      product: { ...product, stock: 1, reservedStock: 0 },
+    });
+
+    await expect(
+      new CheckoutService(prisma, gateway).getByReference(
+        pendingTransaction.reference,
+      ),
+    ).resolves.toMatchObject({
+      status: TransactionStatus.APPROVED,
+      product: { stock: 1 },
+    });
+    expect(getGatewayTransaction).not.toHaveBeenCalled();
+  });
+
+  it('returns not found for an unknown reference', async () => {
+    findTransactionByReference.mockResolvedValue(null);
+
+    await expect(
+      new CheckoutService(prisma, gateway).getByReference(
+        pendingTransaction.reference,
+      ),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('does not mutate inventory twice when a transaction is already final', async () => {
+    createGatewayTransaction.mockResolvedValue({
+      id: 'provider-id',
+      status: 'APPROVED',
+    });
+    updateLocalStatus.mockResolvedValue({ count: 0 });
+    findTransactionByReference.mockResolvedValue({
+      ...pendingTransaction,
+      status: TransactionStatus.APPROVED,
+      providerTransactionId: 'provider-id',
+      product: { ...product, stock: 0, reservedStock: 0 },
+    });
+
+    await new CheckoutService(prisma, gateway).create(dto);
+    expect(updateProduct).not.toHaveBeenCalled();
   });
 });

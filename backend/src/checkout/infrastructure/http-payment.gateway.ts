@@ -65,7 +65,7 @@ export class HttpPaymentGateway implements PaymentGateway {
     const response = await fetch(
       `${this.baseUrl}/merchants/${encodeURIComponent(publicKey)}`,
     );
-    const body = (await this.safeJson(response)) as MerchantResponse;
+    const body = ((await this.safeJson(response)) ?? {}) as MerchantResponse;
     const terms = body.data?.presigned_acceptance;
     const personalData = body.data?.presigned_personal_data_auth;
 
@@ -125,7 +125,8 @@ export class HttpPaymentGateway implements PaymentGateway {
         Authorization: `Bearer ${this.required('PAYMENT_PUBLIC_KEY')}`,
       },
     });
-    const body = (await this.safeJson(response)) as TokenizationKeyResponse;
+    const body = ((await this.safeJson(response)) ??
+      {}) as TokenizationKeyResponse;
     const publicKey = body.data?.publicKey;
     if (!response.ok || !publicKey) {
       throw new BadGatewayException(
@@ -144,7 +145,8 @@ export class HttpPaymentGateway implements PaymentGateway {
       },
       body: JSON.stringify({ payload }),
     });
-    const body = (await this.safeJson(response)) as TokenizationResponse;
+    const body = ((await this.safeJson(response)) ??
+      {}) as TokenizationResponse;
     const token = body.data?.id;
     if (!response.ok || body.status !== 'CREATED' || !token) {
       throw new BadGatewayException('La tarjeta no pudo ser tokenizada.');
@@ -179,7 +181,7 @@ export class HttpPaymentGateway implements PaymentGateway {
   private async readTransaction(
     response: Response,
   ): Promise<GatewayTransaction> {
-    const body = (await this.safeJson(response)) as TransactionResponse;
+    const body = ((await this.safeJson(response)) ?? {}) as TransactionResponse;
     const id = body.data?.id;
     const status = body.data?.status;
 
