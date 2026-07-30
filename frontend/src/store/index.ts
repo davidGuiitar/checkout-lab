@@ -12,6 +12,12 @@ export interface CheckoutConfig {
   baseFee: number
   deliveryFee: number
   paymentPublicKey: string | null
+  paymentApiUrl: string | null
+  tokenizationKey: string | null
+  contracts: {
+    termsUrl: string
+    personalDataUrl: string
+  } | null
 }
 
 export interface CheckoutDraft {
@@ -62,7 +68,14 @@ export default createStore<CheckoutState>({
   state: {
     apiUrl,
     product: null,
-    config: { baseFee: 2_000, deliveryFee: 8_000, paymentPublicKey: null },
+    config: {
+      baseFee: 2_000,
+      deliveryFee: 8_000,
+      paymentPublicKey: null,
+      paymentApiUrl: null,
+      tokenizationKey: null,
+      contracts: null,
+    },
     draft: loadDraft(),
     isLoading: false,
     error: null,

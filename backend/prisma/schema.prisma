@@ -16,16 +16,17 @@ enum TransactionStatus {
 }
 
 model Product {
-  id           String        @id @default(uuid())
-  slug         String        @unique
-  name         String
-  description  String
-  price        Int
-  stock        Int
-  isFeatured   Boolean       @default(false)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  transactions Transaction[]
+  id            String        @id @default(uuid())
+  slug          String        @unique
+  name          String
+  description   String
+  price         Int
+  stock         Int
+  reservedStock Int           @default(0)
+  isFeatured    Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  transactions  Transaction[]
 }
 
 model Customer {

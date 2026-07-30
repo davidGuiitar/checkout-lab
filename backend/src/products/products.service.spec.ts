@@ -10,10 +10,25 @@ describe('ProductsService', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('returns the featured product', async () => {
-    const product = { id: 'product-1', stock: 3 };
+    const product = {
+      id: 'product-1',
+      slug: 'product',
+      name: 'Product',
+      description: 'Description',
+      price: 100,
+      stock: 3,
+      reservedStock: 1,
+    };
     findFirst.mockResolvedValue(product);
 
-    await expect(service.getFeatured()).resolves.toEqual(product);
+    await expect(service.getFeatured()).resolves.toEqual({
+      id: 'product-1',
+      slug: 'product',
+      name: 'Product',
+      description: 'Description',
+      price: 100,
+      stock: 2,
+    });
     expect(findFirst).toHaveBeenCalledWith({
       where: { isFeatured: true },
       orderBy: { createdAt: 'asc' },

@@ -56,8 +56,17 @@ textarea { resize: vertical; }
 .two-columns { display: grid; gap: .75rem; grid-template-columns: 1fr 1fr; }
 .hint, .security-note { font-size: .8rem; }
 .field-error { color: #a42121 !important; font-size: .9rem; margin-bottom: .75rem !important; }
+.contracts { border-top: 1px solid #dce2eb; padding-top: 1rem; }
+.checkbox-label { align-items: flex-start; display: flex; gap: .65rem; font-weight: 500; }
+.checkbox-label input { flex: 0 0 auto; margin: .2rem 0 0; width: auto; }
+.checkbox-label a { color: #1769aa; }
 .summary dl { margin: 1rem 0; }
 .summary dl div { display: flex; justify-content: space-between; padding: .6rem 0; }
 .summary dd { margin: 0; }
 .summary .total { border-top: 1px solid #dce2eb; font-size: 1.1rem; font-weight: 700; margin-top: .5rem; }
+.result { text-align: center; }
+.result p { color: #52607a; line-height: 1.5; }
+.status-icon { align-items: center; background: #fff3dc; border-radius: 50%; color: #8a5a00; display: flex; font-size: 2rem; font-weight: 700; height: 4rem; justify-content: center; margin: 0 auto 1rem; width: 4rem; }
+.status-icon[data-status="APPROVED"] { background: #e1f6e9; color: #1f7041; }
+.status-icon[data-status="DECLINED"], .status-icon[data-status="ERROR"], .status-icon[data-status="VOIDED"] { background: #fde8e8; color: #a42121; }
 @media (max-width: 360px) { .checkout-shell { padding: 1rem; } .checkout-card, .modal { padding: 1.25rem; } .two-columns { grid-template-columns: 1fr; gap: 0; } }
