@@ -24,13 +24,18 @@ button, input { font: inherit; }
   background: #fff;
   border-radius: 1rem;
   box-shadow: 0 12px 35px rgb(23 32 51 / 12%);
-  max-width: 32rem;
+  max-width: 68rem;
   padding: 2rem;
   width: 100%;
 }
 
-.checkout-card h1 { font-size: clamp(2rem, 8vw, 3rem); margin: .25rem 0 1rem; }
+.checkout-card h1 { font-size: clamp(2rem, 8vw, 3rem); margin: .25rem 0 .5rem; }
 .checkout-card p { color: #52607a; line-height: 1.55; margin: 0; }
+.catalog-description { margin-bottom: 2rem !important; }
+.product-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.product-card { border: 1px solid #dce2eb; border-radius: .9rem; display: flex; flex-direction: column; padding: 1.25rem; }
+.product-card h2 { font-size: 1.2rem; margin: .8rem 0 .5rem; }
+.product-card .description { flex: 1; }
 .eyebrow { color: #1769aa !important; font-size: .875rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .description { min-height: 3rem; }
 .product-icon { align-items: center; background: #e3f1ff; border-radius: 50%; color: #1769aa; display: flex; font-size: 2rem; height: 4rem; justify-content: center; width: 4rem; }
@@ -69,4 +74,5 @@ textarea { resize: vertical; }
 .status-icon { align-items: center; background: #fff3dc; border-radius: 50%; color: #8a5a00; display: flex; font-size: 2rem; font-weight: 700; height: 4rem; justify-content: center; margin: 0 auto 1rem; width: 4rem; }
 .status-icon[data-status="APPROVED"] { background: #e1f6e9; color: #1f7041; }
 .status-icon[data-status="DECLINED"], .status-icon[data-status="ERROR"], .status-icon[data-status="VOIDED"] { background: #fde8e8; color: #a42121; }
-@media (max-width: 360px) { .checkout-shell { padding: 1rem; } .checkout-card, .modal { padding: 1.25rem; } .two-columns { grid-template-columns: 1fr; gap: 0; } }
+@media (max-width: 600px) { .product-grid, .two-columns { grid-template-columns: 1fr; } }
+@media (max-width: 360px) { .checkout-shell { padding: 1rem; } .checkout-card, .modal { padding: 1.25rem; } .two-columns { gap: 0; } }

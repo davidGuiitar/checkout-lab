@@ -10,7 +10,7 @@ import {
   isValidLuhn,
   normalizeCardNumber,
 } from '../lib/payment-validators'
-import type { CheckoutDraft, CheckoutState } from '../store'
+import type { CheckoutDraft, CheckoutState, Product } from '../store'
 
 type PaymentStatus = 'PENDING' | 'APPROVED' | 'DECLINED' | 'VOIDED' | 'ERROR'
 
@@ -35,6 +35,7 @@ const acceptedPersonalData = ref(false)
 const card = reactive({ number: '', expiry: '', cvc: '' })
 const form = reactive<CheckoutDraft>({ ...store.state.draft })
 
+const products = computed(() => store.state.products)
 const product = computed(() => store.state.product)
 const config = computed(() => store.state.config)
 const brand = computed(() => detectCardBrand(card.number))
@@ -131,7 +132,19 @@ async function submitDetails(): Promise<void> {
   }
 }
 
-function openForm(): void {
+function productIcon(slug: string): string {
+  return (
+    {
+      'audifonos-inalambricos': '🎧',
+      'parlante-bluetooth': '🔊',
+      'teclado-mecanico': '⌨️',
+      'reloj-inteligente': '⌚',
+    }[slug] ?? '🛍️'
+  )
+}
+
+function openForm(selectedProduct?: Product): void {
+  if (selectedProduct) store.commit('selectProduct', selectedProduct)
   Object.assign(form, store.state.draft)
   attemptedSubmit.value = false
   paymentError.value = null
@@ -249,10 +262,14 @@ onMounted(async () => {
 
 <template>
   <main class="checkout-shell">
-    <section class="checkout-card" aria-labelledby="checkout-title">
+    <section class="checkout-card catalog" aria-labelledby="checkout-title">
       <p class="eyebrow">Compra segura</p>
+      <h1 id="checkout-title">Elige tu producto</h1>
+      <p class="catalog-description">
+        Tecnología para todos los días, con pago y entrega seguros.
+      </p>
       <div v-if="store.state.isLoading" class="loading" aria-live="polite">
-        Cargando producto…
+        Cargando productos…
       </div>
       <div v-else-if="store.state.error" class="alert" role="alert">
         {{ store.state.error }}
@@ -264,25 +281,28 @@ onMounted(async () => {
           Reintentar
         </button>
       </div>
-      <template v-else-if="product">
-        <div class="product-icon" aria-hidden="true">♫</div>
-        <h1 id="checkout-title">{{ product.name }}</h1>
-        <p class="description">{{ product.description }}</p>
-        <div class="product-meta">
-          <strong>{{ formatCop(product.price) }}</strong>
-          <span :class="{ soldout: product.stock === 0 }">
-            {{ product.stock }} unidades disponibles
-          </span>
-        </div>
-        <button
-          class="primary-button"
-          type="button"
-          :disabled="product.stock === 0"
-          @click="openForm"
-        >
-          Pagar con tarjeta
-        </button>
-      </template>
+      <div v-else-if="products.length" class="product-grid">
+        <article v-for="item in products" :key="item.id" class="product-card">
+          <div class="product-icon" aria-hidden="true">{{ productIcon(item.slug) }}</div>
+          <h2>{{ item.name }}</h2>
+          <p class="description">{{ item.description }}</p>
+          <div class="product-meta">
+            <strong>{{ formatCop(item.price) }}</strong>
+            <span :class="{ soldout: item.stock === 0 }">
+              {{ item.stock }} unidades disponibles
+            </span>
+          </div>
+          <button
+            class="primary-button"
+            type="button"
+            :disabled="item.stock === 0"
+            @click="openForm(item)"
+          >
+            Pagar con tarjeta
+          </button>
+        </article>
+      </div>
+      <div v-else class="alert" role="alert">No hay productos disponibles.</div>
     </section>
 
     <div
@@ -473,7 +493,7 @@ onMounted(async () => {
           type="button"
           @click="returnToProduct"
         >
-          Volver al producto
+          Volver a productos
         </button>
       </section>
     </div>

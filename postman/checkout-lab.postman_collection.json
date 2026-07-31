@@ -25,6 +25,22 @@
   ],
   "item": [
     {
+      "name": "Catálogo de productos",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/products",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "products"
+          ]
+        }
+      }
+    },
+    {
       "name": "Producto destacado",
       "request": {
         "method": "GET",

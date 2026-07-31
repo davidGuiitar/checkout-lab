@@ -1,6 +1,6 @@
 # Checkout Lab
 
-Checkout de un solo producto construido con Vue 3 + Vuex y NestJS + Prisma +
+Checkout de un catálogo de cuatro productos construido con Vue 3 + Vuex y NestJS + Prisma +
 PostgreSQL. Incluye tokenización cifrada, pagos sandbox, inventario atómico,
 recuperación tras refresh, pruebas con umbral obligatorio de cobertura y una
 infraestructura reproducible para AWS.
@@ -12,7 +12,7 @@ Repositorio canónico:
 
 El flujo cubre las cinco vistas de la prueba:
 
-1. Producto destacado, precio e inventario disponible.
+1. Catálogo de productos, precios e inventario disponible.
 2. Datos personales, entrega y tarjeta con validación inmediata.
 3. Resumen de producto, tarifa base, envío y total.
 4. Procesamiento y recuperación segura de una transacción pendiente.
@@ -184,6 +184,7 @@ Servicios locales:
 
 | Método | Ruta | Descripción |
 | --- | --- | --- |
+| `GET` | `/products` | Catálogo, precios e inventario disponible. |
 | `GET` | `/products/featured` | Producto, precio e inventario disponible. |
 | `GET` | `/checkout/config` | Tarifas, contratos y llave pública de cifrado. |
 | `POST` | `/checkout/tokenize` | Recibe únicamente un JWE y devuelve token efímero. |
@@ -215,8 +216,8 @@ Cobertura global verificada con Jest el 30 de julio de 2026:
 
 | Aplicación | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| Frontend | 90,57% | 86,74% | 89,41% | 93,25% |
-| Backend | 98,91% | 91,93% | 97,36% | 98,75% |
+| Frontend | 90,70% | 85,94% | 90,52% | 93,40% |
+| Backend | 98,94% | 91,93% | 97,61% | 98,79% |
 
 Ambas configuraciones imponen 80% global en statements, branches, functions y
 lines. Las E2E usan PostgreSQL real y cubren aprobado, rechazado, error de red,

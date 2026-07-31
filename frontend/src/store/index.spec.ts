@@ -3,11 +3,13 @@ import { createCheckoutStore } from './index'
 describe('checkout store', () => {
   const product = {
     id: 'product-id',
+    slug: 'product',
     name: 'Product',
     description: 'Description',
     price: 100_000,
     stock: 2,
   }
+  const products = [product]
   const config = {
     baseFee: 2_000,
     deliveryFee: 8_000,
@@ -65,7 +67,7 @@ describe('checkout store', () => {
   it('loads product and checkout configuration', async () => {
     const fetchMock = jest
       .fn()
-      .mockResolvedValueOnce(response(product))
+      .mockResolvedValueOnce(response(products))
       .mockResolvedValueOnce(response(config))
     globalThis.fetch = fetchMock
     const store = createCheckoutStore()
@@ -74,12 +76,23 @@ describe('checkout store', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/products/featured',
+      'http://localhost:3000/products',
     )
+    expect(store.state.products).toEqual(products)
     expect(store.state.product).toEqual(product)
     expect(store.state.config).toEqual(config)
     expect(store.state.error).toBeNull()
     expect(store.state.isLoading).toBe(false)
+  })
+
+  it('selects a product and preserves it when the catalog refreshes', () => {
+    const secondProduct = { ...product, id: 'product-2', slug: 'product-2' }
+    const store = createCheckoutStore()
+    store.commit('setData', { products: [product, secondProduct], config })
+    store.commit('selectProduct', secondProduct)
+    store.commit('setData', { products: [product, secondProduct], config })
+
+    expect(store.state.product).toEqual(secondProduct)
   })
 
   it('reports HTTP and network errors while always clearing loading', async () => {

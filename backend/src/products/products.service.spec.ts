@@ -4,10 +4,41 @@ import { ProductsService } from './products.service';
 
 describe('ProductsService', () => {
   const findFirst = jest.fn();
-  const prisma = { product: { findFirst } } as unknown as PrismaService;
+  const findMany = jest.fn();
+  const prisma = {
+    product: { findFirst, findMany },
+  } as unknown as PrismaService;
   const service = new ProductsService(prisma);
 
   beforeEach(() => jest.clearAllMocks());
+
+  it('returns all products with available inventory', async () => {
+    findMany.mockResolvedValue([
+      {
+        id: 'product-1',
+        slug: 'product',
+        name: 'Product',
+        description: 'Description',
+        price: 100,
+        stock: 100,
+        reservedStock: 2,
+      },
+    ]);
+
+    await expect(service.getAll()).resolves.toEqual([
+      {
+        id: 'product-1',
+        slug: 'product',
+        name: 'Product',
+        description: 'Description',
+        price: 100,
+        stock: 98,
+      },
+    ]);
+    expect(findMany).toHaveBeenCalledWith({
+      orderBy: [{ isFeatured: 'desc' }, { createdAt: 'asc' }],
+    });
+  });
 
   it('returns the featured product', async () => {
     const product = {

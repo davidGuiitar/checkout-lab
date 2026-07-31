@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 
-export interface FeaturedProduct {
+export interface ProductResponse {
   id: string;
   slug: string;
   name: string;
@@ -14,7 +14,15 @@ export interface FeaturedProduct {
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getFeatured(): Promise<FeaturedProduct> {
+  async getAll(): Promise<ProductResponse[]> {
+    const products = await this.prisma.product.findMany({
+      orderBy: [{ isFeatured: 'desc' }, { createdAt: 'asc' }],
+    });
+
+    return products.map((product) => this.toResponse(product));
+  }
+
+  async getFeatured(): Promise<ProductResponse> {
     const product = await this.prisma.product.findFirst({
       where: { isFeatured: true },
       orderBy: { createdAt: 'asc' },
@@ -24,6 +32,18 @@ export class ProductsService {
       throw new NotFoundException('No hay producto destacado disponible.');
     }
 
+    return this.toResponse(product);
+  }
+
+  private toResponse(product: {
+    id: string;
+    slug: string;
+    name: string;
+    description: string;
+    price: number;
+    stock: number;
+    reservedStock: number;
+  }): ProductResponse {
     return {
       id: product.id,
       slug: product.slug,

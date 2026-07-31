@@ -2,6 +2,7 @@ import { createStore } from 'vuex'
 
 export interface Product {
   id: string
+  slug: string
   name: string
   description: string
   price: number
@@ -34,6 +35,7 @@ export interface CheckoutDraft {
 
 export interface CheckoutState {
   apiUrl: string
+  products: Product[]
   product: Product | null
   config: CheckoutConfig
   draft: CheckoutDraft
@@ -68,6 +70,7 @@ export function createCheckoutStore() {
   return createStore<CheckoutState>({
     state: {
       apiUrl,
+      products: [],
       product: null,
       config: {
         baseFee: 2_000,
@@ -86,9 +89,16 @@ export function createCheckoutStore() {
         state.isLoading = Boolean(payload)
       },
       setData(state, payload) {
-        const data = payload as { product: Product; config: CheckoutConfig }
-        state.product = data.product
+        const data = payload as { products: Product[]; config: CheckoutConfig }
+        const selectedId = state.product?.id
+        state.products = data.products
+        state.product =
+          data.products.find(({ id }) => id === selectedId) ?? data.products[0] ?? null
         state.config = data.config
+      },
+      selectProduct(state, payload) {
+        const product = payload as Product
+        state.product = state.products.find(({ id }) => id === product.id) ?? null
       },
       setError(state, payload) {
         state.error = payload ? String(payload) : null
@@ -103,15 +113,15 @@ export function createCheckoutStore() {
         commit('setLoading', true)
         commit('setError', null)
         try {
-          const [productResponse, configResponse] = await Promise.all([
-            fetch(`${state.apiUrl}/products/featured`),
+          const [productsResponse, configResponse] = await Promise.all([
+            fetch(`${state.apiUrl}/products`),
             fetch(`${state.apiUrl}/checkout/config`),
           ])
-          if (!productResponse.ok || !configResponse.ok) {
+          if (!productsResponse.ok || !configResponse.ok) {
             throw new Error('No fue posible cargar el checkout.')
           }
           commit('setData', {
-            product: (await productResponse.json()) as Product,
+            products: (await productsResponse.json()) as Product[],
             config: (await configResponse.json()) as CheckoutConfig,
           })
         } catch (error: unknown) {

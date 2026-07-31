@@ -12,11 +12,21 @@ const tokenizeCardMock = tokenizeCard as jest.MockedFunction<typeof tokenizeCard
 describe('CheckoutView', () => {
   const product = {
     id: 'f91a45dc-b838-4d0f-81bb-f1db46ca48fa',
+    slug: 'audifonos-inalambricos',
     name: 'Test Product',
     description: 'Test Description',
     price: 100_000,
     stock: 2,
   }
+  const secondProduct = {
+    ...product,
+    id: '40d333d9-d196-4b31-9777-07b18c12ad1f',
+    slug: 'parlante-bluetooth',
+    name: 'Second Product',
+    price: 80_000,
+    stock: 100,
+  }
+  const products = [product, secondProduct]
   const config = {
     baseFee: 2_000,
     deliveryFee: 8_000,
@@ -48,7 +58,7 @@ describe('CheckoutView', () => {
   ) {
     return jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
-      if (url.endsWith('/products/featured')) return response(product)
+      if (url.endsWith('/products')) return response(products)
       if (url.endsWith('/checkout/config')) return response(checkoutConfig)
       if (url.endsWith('/checkout') && init?.method === 'POST') {
         return response(checkoutResult, checkoutOk)
@@ -78,6 +88,10 @@ describe('CheckoutView', () => {
 
   async function fillValidForm(wrapper: VueWrapper) {
     await button(wrapper, 'Pagar con tarjeta').trigger('click')
+    await fillValidFormFields(wrapper)
+  }
+
+  async function fillValidFormFields(wrapper: VueWrapper) {
     const fieldsets = wrapper.findAll('fieldset')
     const personal = fieldsets[0].findAll('input')
     await personal[0].setValue('Test Customer')
@@ -115,7 +129,9 @@ describe('CheckoutView', () => {
   it('completes an approved checkout without persisting sensitive data', async () => {
     const { wrapper, fetchMock } = await mountView()
     expect(wrapper.text()).toContain('Test Product')
+    expect(wrapper.text()).toContain('Second Product')
     expect(wrapper.text()).toContain('2 unidades disponibles')
+    expect(wrapper.text()).toContain('100 unidades disponibles')
 
     await fillValidForm(wrapper)
     await wrapper.get('form').trigger('submit')
@@ -144,12 +160,35 @@ describe('CheckoutView', () => {
       'tok_test_safe',
     )
 
-    await button(wrapper, 'Volver al producto').trigger('click')
+    await button(wrapper, 'Volver a productos').trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('Test Product')
     expect(
       window.localStorage.getItem('checkout-transaction-reference'),
     ).toBeNull()
+  })
+
+  it('checks out the product selected from the catalog', async () => {
+    const { wrapper, fetchMock } = await mountView()
+    const productCards = wrapper.findAll('.product-card')
+
+    await productCards[1].get('button').trigger('click')
+    await fillValidFormFields(wrapper)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Second Product')
+
+    await button(wrapper, 'Confirmar pago').trigger('click')
+    await flushPromises()
+    const checkoutCall = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url).endsWith('/checkout') &&
+        (init as RequestInit | undefined)?.method === 'POST',
+    )
+    const body = JSON.parse(
+      String((checkoutCall?.[1] as RequestInit).body),
+    ) as { productId: string }
+    expect(body.productId).toBe(secondProduct.id)
   })
 
   it('validates the form and reports tokenization errors', async () => {
@@ -226,7 +265,7 @@ describe('CheckoutView', () => {
     failingFetch.mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url.includes('/transactions/')) return response({}, false)
-      if (url.endsWith('/products/featured')) return response(product)
+      if (url.endsWith('/products')) return response(products)
       return response(config)
     })
     await mountView(failingFetch)
