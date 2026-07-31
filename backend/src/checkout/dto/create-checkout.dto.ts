@@ -1,6 +1,10 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
   Equals,
+  IsArray,
   IsEmail,
   IsInt,
   IsNotEmpty,
@@ -14,6 +18,16 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+
+export class CheckoutItemDto {
+  @IsUUID()
+  productId!: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  quantity!: number;
+}
 
 export class CustomerDto {
   @IsString()
@@ -57,13 +71,24 @@ export class DeliveryDto {
 }
 
 export class CreateCheckoutDto {
+  @IsOptional()
   @IsUUID()
-  productId!: string;
+  productId?: string;
 
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Max(100)
-  quantity!: number;
+  quantity?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(20)
+  @ArrayUnique((item: CheckoutItemDto) => item.productId)
+  @ValidateNested({ each: true })
+  @Type(() => CheckoutItemDto)
+  items?: CheckoutItemDto[];
 
   @ValidateNested()
   @Type(() => CustomerDto)

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   BadGatewayException,
   ConflictException,
   Inject,
@@ -18,10 +19,12 @@ import type {
   PaymentGateway,
   PaymentStatus,
 } from './domain/payment-gateway.port';
-import { CreateCheckoutDto } from './dto/create-checkout.dto';
+import { CheckoutItemDto, CreateCheckoutDto } from './dto/create-checkout.dto';
 import { BASE_FEE, DELIVERY_FEE } from './checkout-config.service';
 
-type TransactionWithProduct = Transaction & { product: Product };
+type TransactionWithItems = Prisma.TransactionGetPayload<{
+  include: { product: true; items: { include: { product: true } } };
+}>;
 const CENTS_PER_PESO = 100;
 
 export interface CheckoutResult {
@@ -34,6 +37,14 @@ export interface CheckoutResult {
     name: string;
     stock: number;
   };
+  items: Array<{
+    productId: string;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    amount: number;
+    stock: number;
+  }>;
 }
 
 @Injectable()
@@ -48,7 +59,7 @@ export class CheckoutService {
     dto: CreateCheckoutDto,
     customerIp?: string,
   ): Promise<CheckoutResult> {
-    const localTransaction = await this.reserveProduct(dto);
+    const localTransaction = await this.reserveProducts(dto);
 
     try {
       const contracts = await this.gateway.getMerchantContracts();
@@ -100,37 +111,86 @@ export class CheckoutService {
     return this.toResult(transaction);
   }
 
-  private async reserveProduct(dto: CreateCheckoutDto): Promise<Transaction> {
+  private requestedItems(dto: CreateCheckoutDto): CheckoutItemDto[] {
+    if (dto.items?.length && (dto.productId || dto.quantity)) {
+      throw new BadRequestException(
+        'Envía items o productId/quantity, pero no ambos formatos.',
+      );
+    }
+    const items = dto.items?.length
+      ? dto.items
+      : dto.productId && dto.quantity
+        ? [{ productId: dto.productId, quantity: dto.quantity }]
+        : [];
+    if (!items.length) {
+      throw new BadRequestException('El carrito debe contener productos.');
+    }
+    if (items.reduce((total, item) => total + item.quantity, 0) > 100) {
+      throw new BadRequestException(
+        'El carrito no puede superar 100 unidades.',
+      );
+    }
+    return [...items].sort((left, right) =>
+      left.productId.localeCompare(right.productId),
+    );
+  }
+
+  private async reserveProducts(dto: CreateCheckoutDto): Promise<Transaction> {
     const reference = `CHK-${randomUUID()}`;
+    const requestedItems = this.requestedItems(dto);
 
     return this.prisma.$transaction(async (database) => {
-      const products = await database.$queryRaw<Product[]>(Prisma.sql`
-        UPDATE "Product"
-        SET "reservedStock" = "reservedStock" + ${dto.quantity}
-        WHERE "id" = ${dto.productId}
-          AND "stock" - "reservedStock" >= ${dto.quantity}
-        RETURNING *
-      `);
-      const product = products[0];
+      const reservedItems: Array<CheckoutItemDto & { product: Product }> = [];
+      for (const item of requestedItems) {
+        const products = await database.$queryRaw<Product[]>(Prisma.sql`
+          UPDATE "Product"
+          SET "reservedStock" = "reservedStock" + ${item.quantity}
+          WHERE "id" = ${item.productId}
+            AND "stock" - "reservedStock" >= ${item.quantity}
+          RETURNING *
+        `);
+        const product = products[0];
 
-      if (!product) {
-        const exists = await database.product.count({
-          where: { id: dto.productId },
-        });
-        if (!exists) throw new NotFoundException('Producto no encontrado.');
-        throw new ConflictException('No hay suficientes unidades disponibles.');
+        if (!product) {
+          const exists = await database.product.count({
+            where: { id: item.productId },
+          });
+          if (!exists) throw new NotFoundException('Producto no encontrado.');
+          throw new ConflictException(
+            `No hay suficientes unidades disponibles para ${item.productId}.`,
+          );
+        }
+        reservedItems.push({ ...item, product });
       }
+
+      const productAmount = reservedItems.reduce(
+        (sum, item) => sum + item.product.price * item.quantity,
+        0,
+      );
+      const totalQuantity = reservedItems.reduce(
+        (sum, item) => sum + item.quantity,
+        0,
+      );
+      const legacyProduct = reservedItems[0].product;
 
       return database.transaction.create({
         data: {
           reference,
-          quantity: dto.quantity,
-          productAmount: product.price * dto.quantity,
+          quantity: totalQuantity,
+          productAmount,
           baseFee: BASE_FEE,
           deliveryFee: DELIVERY_FEE,
-          total: product.price * dto.quantity + BASE_FEE + DELIVERY_FEE,
+          total: productAmount + BASE_FEE + DELIVERY_FEE,
           product: {
-            connect: { id: product.id },
+            connect: { id: legacyProduct.id },
+          },
+          items: {
+            create: reservedItems.map((item) => ({
+              product: { connect: { id: item.product.id } },
+              quantity: item.quantity,
+              unitPrice: item.product.price,
+              amount: item.product.price * item.quantity,
+            })),
           },
           customer: {
             create: {
@@ -175,17 +235,28 @@ export class CheckoutService {
 
       const transaction = await database.transaction.findUniqueOrThrow({
         where: { id: transactionId },
+        include: { items: true },
       });
-      await database.product.update({
-        where: { id: transaction.productId },
-        data:
-          status === 'APPROVED'
-            ? {
-                stock: { decrement: transaction.quantity },
-                reservedStock: { decrement: transaction.quantity },
-              }
-            : { reservedStock: { decrement: transaction.quantity } },
-      });
+      const inventoryItems = transaction.items.length
+        ? transaction.items
+        : [
+            {
+              productId: transaction.productId,
+              quantity: transaction.quantity,
+            },
+          ];
+      for (const item of inventoryItems) {
+        await database.product.update({
+          where: { id: item.productId },
+          data:
+            status === 'APPROVED'
+              ? {
+                  stock: { decrement: item.quantity },
+                  reservedStock: { decrement: item.quantity },
+                }
+              : { reservedStock: { decrement: item.quantity } },
+        });
+      }
     });
   }
 
@@ -201,10 +272,10 @@ export class CheckoutService {
 
   private async findTransaction(
     reference: string,
-  ): Promise<TransactionWithProduct> {
+  ): Promise<TransactionWithItems> {
     const transaction = await this.prisma.transaction.findUnique({
       where: { reference },
-      include: { product: true },
+      include: { product: true, items: { include: { product: true } } },
     });
     if (!transaction) {
       throw new NotFoundException('Transacción no encontrada.');
@@ -212,7 +283,18 @@ export class CheckoutService {
     return transaction;
   }
 
-  private toResult(transaction: TransactionWithProduct): CheckoutResult {
+  private toResult(transaction: TransactionWithItems): CheckoutResult {
+    const items = transaction.items.length
+      ? transaction.items
+      : [
+          {
+            productId: transaction.productId,
+            product: transaction.product,
+            quantity: transaction.quantity,
+            unitPrice: transaction.productAmount / transaction.quantity,
+            amount: transaction.productAmount,
+          },
+        ];
     return {
       reference: transaction.reference,
       status: transaction.status,
@@ -226,6 +308,14 @@ export class CheckoutService {
           transaction.product.stock - transaction.product.reservedStock,
         ),
       },
+      items: items.map((item) => ({
+        productId: item.productId,
+        name: item.product.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        amount: item.amount,
+        stock: Math.max(0, item.product.stock - item.product.reservedStock),
+      })),
     };
   }
 }

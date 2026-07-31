@@ -16,17 +16,18 @@ enum TransactionStatus {
 }
 
 model Product {
-  id            String        @id @default(uuid())
-  slug          String        @unique
-  name          String
-  description   String
-  price         Int
-  stock         Int
-  reservedStock Int           @default(0)
-  isFeatured    Boolean       @default(false)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  transactions  Transaction[]
+  id               String            @id @default(uuid())
+  slug             String            @unique
+  name             String
+  description      String
+  price            Int
+  stock            Int
+  reservedStock    Int               @default(0)
+  isFeatured       Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  transactions     Transaction[]
+  transactionItems TransactionItem[]
 }
 
 model Customer {
@@ -68,7 +69,23 @@ model Transaction {
   product               Product           @relation(fields: [productId], references: [id])
   customer              Customer          @relation(fields: [customerId], references: [id])
   delivery              Delivery          @relation(fields: [deliveryId], references: [id])
+  items                 TransactionItem[]
 
   @@index([status])
+  @@index([productId])
+}
+
+model TransactionItem {
+  id            String      @id @default(uuid())
+  transactionId String
+  productId     String
+  quantity      Int
+  unitPrice     Int
+  amount        Int
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  product       Product     @relation(fields: [productId], references: [id])
+
+  @@unique([transactionId, productId])
+  @@index([transactionId])
   @@index([productId])
 }

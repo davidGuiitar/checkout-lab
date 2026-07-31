@@ -39,6 +39,14 @@ describe('CheckoutService', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
+  const transactionItem = {
+    id: 'transaction-item-id',
+    transactionId: pendingTransaction.id,
+    productId: product.id,
+    quantity: 2,
+    unitPrice: product.price,
+    amount: product.price * 2,
+  };
   const dto: CreateCheckoutDto = {
     productId: product.id,
     quantity: 2,
@@ -109,7 +117,10 @@ describe('CheckoutService', () => {
     countProducts.mockResolvedValue(1);
     createLocalTransaction.mockResolvedValue(pendingTransaction);
     updateLocalStatus.mockResolvedValue({ count: 1 });
-    findLocalTransaction.mockResolvedValue(pendingTransaction);
+    findLocalTransaction.mockResolvedValue({
+      ...pendingTransaction,
+      items: [transactionItem],
+    });
     updateProduct.mockResolvedValue(product);
     getMerchantContracts.mockResolvedValue({
       acceptanceToken: 'acceptance',
@@ -131,6 +142,12 @@ describe('CheckoutService', () => {
       status: TransactionStatus.APPROVED,
       providerTransactionId: 'provider-id',
       product: { ...product, stock: 0, reservedStock: 0 },
+      items: [
+        {
+          ...transactionItem,
+          product: { ...product, stock: 0, reservedStock: 0 },
+        },
+      ],
     });
 
     await expect(
@@ -182,12 +199,19 @@ describe('CheckoutService', () => {
         ...pendingTransaction,
         providerTransactionId: 'provider-id',
         product,
+        items: [{ ...transactionItem, product }],
       })
       .mockResolvedValueOnce({
         ...pendingTransaction,
         providerTransactionId: 'provider-id',
         status: TransactionStatus.APPROVED,
         product: { ...product, stock: 0, reservedStock: 0 },
+        items: [
+          {
+            ...transactionItem,
+            product: { ...product, stock: 0, reservedStock: 0 },
+          },
+        ],
       });
 
     await expect(
@@ -207,6 +231,12 @@ describe('CheckoutService', () => {
       providerTransactionId: 'provider-id',
       status: TransactionStatus.DECLINED,
       product: { ...product, reservedStock: 0 },
+      items: [
+        {
+          ...transactionItem,
+          product: { ...product, reservedStock: 0 },
+        },
+      ],
     });
 
     await expect(
@@ -246,6 +276,12 @@ describe('CheckoutService', () => {
       status: TransactionStatus.APPROVED,
       providerTransactionId: 'provider-id',
       product: { ...product, stock: 1, reservedStock: 0 },
+      items: [
+        {
+          ...transactionItem,
+          product: { ...product, stock: 1, reservedStock: 0 },
+        },
+      ],
     });
 
     await expect(
@@ -280,9 +316,117 @@ describe('CheckoutService', () => {
       status: TransactionStatus.APPROVED,
       providerTransactionId: 'provider-id',
       product: { ...product, stock: 0, reservedStock: 0 },
+      items: [
+        {
+          ...transactionItem,
+          product: { ...product, stock: 0, reservedStock: 0 },
+        },
+      ],
     });
 
     await new CheckoutService(prisma, gateway).create(dto);
     expect(updateProduct).not.toHaveBeenCalled();
+  });
+
+  it('reserves and finalizes different products in one cart', async () => {
+    const secondProduct = {
+      ...product,
+      id: '40d333d9-d196-4b31-9777-07b18c12ad1f',
+      name: 'Second Product',
+      price: 50_000,
+      stock: 5,
+      reservedStock: 1,
+    };
+    const cartDto: CreateCheckoutDto = {
+      ...dto,
+      productId: undefined,
+      quantity: undefined,
+      items: [
+        { productId: product.id, quantity: 2 },
+        { productId: secondProduct.id, quantity: 1 },
+      ],
+    };
+    reserveProduct
+      .mockResolvedValueOnce([secondProduct])
+      .mockResolvedValueOnce([product]);
+    createLocalTransaction.mockResolvedValue({
+      ...pendingTransaction,
+      quantity: 3,
+      productAmount: 250_000,
+      total: 260_000,
+    });
+    findLocalTransaction.mockResolvedValue({
+      ...pendingTransaction,
+      quantity: 3,
+      items: [
+        { ...transactionItem, productId: secondProduct.id, quantity: 1 },
+        transactionItem,
+      ],
+    });
+    createGatewayTransaction.mockResolvedValue({
+      id: 'provider-id',
+      status: 'APPROVED',
+    });
+    findTransactionByReference.mockResolvedValue({
+      ...pendingTransaction,
+      status: TransactionStatus.APPROVED,
+      quantity: 3,
+      productAmount: 250_000,
+      total: 260_000,
+      product: secondProduct,
+      items: [
+        {
+          ...transactionItem,
+          productId: secondProduct.id,
+          quantity: 1,
+          unitPrice: secondProduct.price,
+          amount: secondProduct.price,
+          product: secondProduct,
+        },
+        { ...transactionItem, product },
+      ],
+    });
+
+    await expect(
+      new CheckoutService(prisma, gateway).create(cartDto),
+    ).resolves.toMatchObject({
+      total: 260_000,
+      quantity: 3,
+      items: [
+        { productId: secondProduct.id, quantity: 1 },
+        { productId: product.id, quantity: 2 },
+      ],
+    });
+    expect(reserveProduct).toHaveBeenCalledTimes(2);
+    expect(updateProduct).toHaveBeenCalledTimes(2);
+    expect(createLocalTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects ambiguous, empty and oversized carts before reserving stock', async () => {
+    const service = new CheckoutService(prisma, gateway);
+    await expect(
+      service.create({
+        ...dto,
+        items: [{ productId: product.id, quantity: 1 }],
+      }),
+    ).rejects.toThrow('pero no ambos formatos');
+    await expect(
+      service.create({ ...dto, productId: undefined, quantity: undefined }),
+    ).rejects.toThrow('debe contener productos');
+    await expect(
+      service.create({
+        ...dto,
+        productId: undefined,
+        quantity: undefined,
+        items: [
+          { productId: product.id, quantity: 100 },
+          {
+            productId: '40d333d9-d196-4b31-9777-07b18c12ad1f',
+            quantity: 1,
+          },
+        ],
+      }),
+    ).rejects.toThrow('no puede superar 100 unidades');
+    expect(reserveProduct).not.toHaveBeenCalled();
   });
 });

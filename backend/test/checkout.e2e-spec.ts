@@ -71,6 +71,7 @@ describe('Checkout flow (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
   let productId: string;
+  let secondProductId: string;
 
   const payload = (paymentToken: string, quantity = 1) => ({
     productId,
@@ -90,6 +91,16 @@ describe('Checkout flow (e2e)', () => {
     installments: 1,
     acceptedTerms: true,
     acceptedPersonalData: true,
+  });
+
+  const cartPayload = (paymentToken: string) => ({
+    ...payload(paymentToken),
+    productId: undefined,
+    quantity: undefined,
+    items: [
+      { productId, quantity: 2 },
+      { productId: secondProductId, quantity: 3 },
+    ],
   });
 
   beforeAll(async () => {
@@ -118,21 +129,44 @@ describe('Checkout flow (e2e)', () => {
       },
     });
     productId = product.id;
+    const secondProduct = await prisma.product.create({
+      data: {
+        slug: `e2e-second-${randomUUID()}`,
+        name: 'Second E2E Product',
+        description: 'Second product isolated for end-to-end tests',
+        price: 50_000,
+        stock: 5,
+      },
+    });
+    secondProductId = secondProduct.id;
   });
 
   afterEach(async () => {
     const transactions = await prisma.transaction.findMany({
-      where: { productId },
-      select: { customerId: true, deliveryId: true },
+      where: {
+        OR: [
+          { productId: { in: [productId, secondProductId] } },
+          {
+            items: {
+              some: { productId: { in: [productId, secondProductId] } },
+            },
+          },
+        ],
+      },
+      select: { id: true, customerId: true, deliveryId: true },
     });
-    await prisma.transaction.deleteMany({ where: { productId } });
+    await prisma.transaction.deleteMany({
+      where: { id: { in: transactions.map(({ id }) => id) } },
+    });
     await prisma.customer.deleteMany({
       where: { id: { in: transactions.map(({ customerId }) => customerId) } },
     });
     await prisma.delivery.deleteMany({
       where: { id: { in: transactions.map(({ deliveryId }) => deliveryId) } },
     });
-    await prisma.product.deleteMany({ where: { id: productId } });
+    await prisma.product.deleteMany({
+      where: { id: { in: [productId, secondProductId] } },
+    });
   });
 
   afterAll(async () => {
@@ -176,6 +210,37 @@ describe('Checkout flow (e2e)', () => {
     await expect(
       prisma.product.findUniqueOrThrow({ where: { id: productId } }),
     ).resolves.toMatchObject({ stock: 2, reservedStock: 0 });
+  });
+
+  it('charges different products and updates all inventory atomically', async () => {
+    await prisma.product.update({
+      where: { id: productId },
+      data: { stock: 4 },
+    });
+
+    const result = await request(app.getHttpServer())
+      .post('/checkout')
+      .send(cartPayload('tok_test_approved'))
+      .expect(201);
+
+    expect(result.body).toMatchObject({
+      status: 'APPROVED',
+      quantity: 5,
+      total: 360_000,
+      items: [
+        { productId, quantity: 2, amount: 200_000, stock: 2 },
+        { productId: secondProductId, quantity: 3, amount: 150_000, stock: 2 },
+      ].sort((left, right) => left.productId.localeCompare(right.productId)),
+    });
+    await expect(
+      prisma.product.findMany({
+        where: { id: { in: [productId, secondProductId] } },
+        orderBy: { price: 'desc' },
+      }),
+    ).resolves.toMatchObject([
+      { id: productId, stock: 2, reservedStock: 0 },
+      { id: secondProductId, stock: 2, reservedStock: 0 },
+    ]);
   });
 
   it('keeps inventory for declined and network-error payments', async () => {
@@ -272,6 +337,18 @@ describe('Checkout flow (e2e)', () => {
     await request(app.getHttpServer())
       .post('/checkout')
       .send(payload('tok_test_approved', 101))
+      .expect(400);
+    await request(app.getHttpServer())
+      .post('/checkout')
+      .send({
+        ...payload('tok_test_approved'),
+        productId: undefined,
+        quantity: undefined,
+        items: [
+          { productId, quantity: 1 },
+          { productId, quantity: 2 },
+        ],
+      })
       .expect(400);
     await request(app.getHttpServer())
       .get('/transactions/invalid-reference')
