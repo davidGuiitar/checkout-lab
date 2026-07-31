@@ -30,4 +30,4 @@ COPY --chown=node:node --from=build /app/prisma ./prisma
 COPY --chown=node:node package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 USER node
 EXPOSE 3000
-CMD ["node", "dist/main"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node prisma/seed.mjs && exec node dist/main"]
