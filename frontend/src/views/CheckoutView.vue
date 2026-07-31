@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useStore } from 'vuex'
+import CardPreview from '../components/CardPreview.vue'
 import { tokenizeCard } from '../lib/payment-gateway'
 import {
   detectCardBrand,
@@ -32,6 +33,7 @@ const paymentError = ref<string | null>(null)
 const paymentToken = ref<string | null>(null)
 const transaction = ref<CheckoutResult | null>(null)
 const quantity = ref(1)
+const isCvcFocused = ref(false)
 const acceptedTerms = ref(false)
 const acceptedPersonalData = ref(false)
 const card = reactive({ number: '', expiry: '', cvc: '' })
@@ -102,6 +104,7 @@ function clearCard(): void {
   card.number = ''
   card.expiry = ''
   card.cvc = ''
+  isCvcFocused.value = false
 }
 
 async function submitDetails(): Promise<void> {
@@ -404,6 +407,14 @@ onMounted(async () => {
         </fieldset>
         <fieldset>
           <legend>Tarjeta</legend>
+          <CardPreview
+            :number="card.number"
+            :holder="form.fullName"
+            :expiry="card.expiry"
+            :cvc="card.cvc"
+            :brand="brand"
+            :show-back="isCvcFocused"
+          />
           <label>
             Número de tarjeta
             <input
@@ -416,7 +427,6 @@ onMounted(async () => {
               @input="formatCardNumber"
             />
           </label>
-          <p v-if="card.number" class="hint">{{ brand ?? 'Solo Visa o Mastercard' }}</p>
           <div class="two-columns">
             <label>
               Vencimiento
@@ -438,6 +448,8 @@ onMounted(async () => {
                 autocomplete="cc-csc"
                 maxlength="4"
                 required
+                @focus="isCvcFocused = true"
+                @blur="isCvcFocused = false"
               />
             </label>
           </div>

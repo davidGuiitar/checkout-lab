@@ -135,6 +135,8 @@ describe('CheckoutView', () => {
     expect(wrapper.text()).toContain('100 unidades disponibles')
 
     await fillValidForm(wrapper)
+    expect(wrapper.get('.payment-card').attributes('data-brand')).toBe('visa')
+    expect(wrapper.text()).toContain('Visa detectada')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(wrapper.text()).toContain('Resumen de pago')
@@ -207,6 +209,25 @@ describe('CheckoutView', () => {
 
     await wrapper.get('button[aria-label="Disminuir cantidad"]').trigger('click')
     expect((quantityInput.element as HTMLInputElement).value).toBe('1')
+  })
+
+  it('updates the visual card brand and flips when entering the CVC', async () => {
+    const { wrapper } = await mountView()
+    await button(wrapper, 'Pagar con tarjeta').trigger('click')
+    const number = wrapper.get('input[autocomplete="cc-number"]')
+    const cvc = wrapper.get('input[autocomplete="cc-csc"]')
+
+    expect(wrapper.text()).toContain('Ingresa el número para detectar la franquicia')
+    await number.setValue('5')
+    expect(wrapper.text()).toContain('Franquicia aún no reconocida')
+    await number.setValue('5555 5555 5555 4444')
+    expect(wrapper.text()).toContain('Mastercard detectada')
+    expect(wrapper.get('.payment-card').attributes('data-brand')).toBe('mastercard')
+
+    await cvc.trigger('focus')
+    expect(wrapper.get('.payment-card').classes()).toContain('is-flipped')
+    await cvc.trigger('blur')
+    expect(wrapper.get('.payment-card').classes()).not.toContain('is-flipped')
   })
 
   it('validates the form and reports tokenization errors', async () => {

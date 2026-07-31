@@ -18,6 +18,9 @@ El flujo cubre las cinco vistas de la prueba:
 4. Procesamiento y recuperación segura de una transacción pendiente.
 5. Resultado aprobado, rechazado, anulado o con error.
 
+El formulario incluye una tarjeta visual reactiva con detección progresiva de
+Visa y Mastercard, número formateado, titular, vencimiento y reverso para CVC.
+
 Solo se persiste el borrador no sensible y la referencia local de la
 transacción. PAN, CVC y token de tarjeta no se guardan en `localStorage`,
 PostgreSQL ni logs.
@@ -218,7 +221,7 @@ Cobertura global verificada con Jest el 31 de julio de 2026:
 
 | Aplicación | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| Frontend | 90,80% | 85,78% | 90,09% | 93,41% |
+| Frontend | 90,88% | 85,96% | 90,29% | 93,48% |
 | Backend | 98,94% | 91,93% | 97,61% | 98,79% |
 
 Ambas configuraciones imponen 80% global en statements, branches, functions y
