@@ -15,6 +15,10 @@
       "value": "00000000-0000-4000-8000-000000000000"
     },
     {
+      "key": "secondProductId",
+      "value": "00000000-0000-4000-8000-000000000001"
+    },
+    {
       "key": "paymentToken",
       "value": "tok_sandbox_from_tokenization"
     },
@@ -86,7 +90,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 2,\n  \"customer\": {\n    \"fullName\": \"Cliente de Prueba\",\n    \"email\": \"cliente@example.com\",\n    \"phone\": \"3000000000\"\n  },\n  \"delivery\": {\n    \"recipientName\": \"Cliente de Prueba\",\n    \"address\": \"Dirección de prueba\",\n    \"city\": \"Bogotá\",\n    \"department\": \"Cundinamarca\"\n  },\n  \"paymentToken\": \"{{paymentToken}}\",\n  \"installments\": 1,\n  \"acceptedTerms\": true,\n  \"acceptedPersonalData\": true\n}"
+          "raw": "{\n  \"items\": [\n    { \"productId\": \"{{productId}}\", \"quantity\": 2 },\n    { \"productId\": \"{{secondProductId}}\", \"quantity\": 1 }\n  ],\n  \"customer\": {\n    \"fullName\": \"Cliente de Prueba\",\n    \"email\": \"cliente@example.com\",\n    \"phone\": \"3000000000\"\n  },\n  \"delivery\": {\n    \"recipientName\": \"Cliente de Prueba\",\n    \"address\": \"Dirección de prueba\",\n    \"city\": \"Bogotá\",\n    \"department\": \"Cundinamarca\"\n  },\n  \"paymentToken\": \"{{paymentToken}}\",\n  \"installments\": 1,\n  \"acceptedTerms\": true,\n  \"acceptedPersonalData\": true\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/checkout",

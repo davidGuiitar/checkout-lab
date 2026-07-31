@@ -44,6 +44,16 @@ describe('CheckoutView', () => {
     total: 110_000,
     quantity: 1,
     product: { id: product.id, name: product.name, stock: 1 },
+    items: [
+      {
+        productId: product.id,
+        name: product.name,
+        quantity: 1,
+        unitPrice: product.price,
+        amount: product.price,
+        stock: 1,
+      },
+    ],
   }
 
   const response = (body: unknown, ok = true) =>
@@ -87,8 +97,13 @@ describe('CheckoutView', () => {
     return found
   }
 
+  async function openCheckout(wrapper: VueWrapper, productIndex = 0) {
+    await wrapper.findAll('.product-card')[productIndex].get('button').trigger('click')
+    await button(wrapper, 'Ir a pagar').trigger('click')
+  }
+
   async function fillValidForm(wrapper: VueWrapper) {
-    await button(wrapper, 'Pagar con tarjeta').trigger('click')
+    if (!wrapper.find('form').exists()) await openCheckout(wrapper)
     await fillValidFormFields(wrapper)
   }
 
@@ -157,7 +172,11 @@ describe('CheckoutView', () => {
     const requestBody = String((checkoutCall?.[1] as RequestInit).body)
     const parsedRequest = JSON.parse(requestBody) as Record<string, unknown>
     expect(parsedRequest.paymentToken).toBe('tok_test_safe')
-    expect(parsedRequest.quantity).toBe(1)
+    expect(parsedRequest.items).toEqual([
+      { productId: product.id, quantity: 1 },
+    ])
+    expect(parsedRequest).not.toHaveProperty('productId')
+    expect(parsedRequest).not.toHaveProperty('quantity')
     expect(parsedRequest).not.toHaveProperty('card')
     expect(parsedRequest).not.toHaveProperty('cvc')
     expect(window.localStorage.getItem('checkout-draft')).not.toContain(
@@ -172,16 +191,27 @@ describe('CheckoutView', () => {
     ).toBeNull()
   })
 
-  it('checks out the product selected from the catalog', async () => {
+  it('checks out different products and quantities from the cart', async () => {
     const { wrapper, fetchMock } = await mountView()
     const productCards = wrapper.findAll('.product-card')
 
+    await productCards[0].get('button').trigger('click')
+    await wrapper.get(`input[aria-label="Cantidad de ${product.name}"]`).setValue(2)
+    await wrapper
+      .get(`input[aria-label="Cantidad de ${product.name}"]`)
+      .trigger('change')
     await productCards[1].get('button').trigger('click')
-    await wrapper.get('input[name="quantity"]').setValue(3)
+    await wrapper
+      .get(`input[aria-label="Cantidad de ${secondProduct.name}"]`)
+      .setValue(3)
+    await wrapper
+      .get(`input[aria-label="Cantidad de ${secondProduct.name}"]`)
+      .trigger('change')
+    await button(wrapper, 'Ir a pagar').trigger('click')
     await fillValidFormFields(wrapper)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(wrapper.text()).toContain('Second Product')
+    expect(wrapper.text()).toContain('Test Product × 2')
     expect(wrapper.text()).toContain('Second Product × 3')
 
     await button(wrapper, 'Confirmar pago').trigger('click')
@@ -193,27 +223,31 @@ describe('CheckoutView', () => {
     )
     const body = JSON.parse(
       String((checkoutCall?.[1] as RequestInit).body),
-    ) as { productId: string; quantity: number }
-    expect(body.productId).toBe(secondProduct.id)
-    expect(body.quantity).toBe(3)
+    ) as { items: Array<{ productId: string; quantity: number }> }
+    expect(body.items).toEqual([
+      { productId: product.id, quantity: 2 },
+      { productId: secondProduct.id, quantity: 3 },
+    ])
   })
 
   it('keeps quantity within the available inventory', async () => {
     const { wrapper } = await mountView()
-    await button(wrapper, 'Pagar con tarjeta').trigger('click')
-    const quantityInput = wrapper.get('input[name="quantity"]')
+    await wrapper.findAll('.product-card')[0].get('button').trigger('click')
+    const quantityInput = wrapper.get(`input[aria-label="Cantidad de ${product.name}"]`)
 
     await quantityInput.setValue(99)
     await quantityInput.trigger('change')
     expect((quantityInput.element as HTMLInputElement).value).toBe('2')
 
-    await wrapper.get('button[aria-label="Disminuir cantidad"]').trigger('click')
+    await wrapper
+      .get(`button[aria-label="Disminuir ${product.name}"]`)
+      .trigger('click')
     expect((quantityInput.element as HTMLInputElement).value).toBe('1')
   })
 
   it('updates the visual card brand and flips when entering the CVC', async () => {
     const { wrapper } = await mountView()
-    await button(wrapper, 'Pagar con tarjeta').trigger('click')
+    await openCheckout(wrapper)
     const number = wrapper.get('input[autocomplete="cc-number"]')
     const cvc = wrapper.get('input[autocomplete="cc-csc"]')
 
@@ -232,7 +266,7 @@ describe('CheckoutView', () => {
 
   it('validates the form and reports tokenization errors', async () => {
     const { wrapper } = await mountView()
-    await button(wrapper, 'Pagar con tarjeta').trigger('click')
+    await openCheckout(wrapper)
     await wrapper.get('form').trigger('submit')
     expect(wrapper.text()).toContain(
       'El nombre completo debe tener entre 3 y 100 caracteres.',

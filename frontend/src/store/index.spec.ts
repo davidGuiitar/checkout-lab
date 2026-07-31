@@ -95,6 +95,43 @@ describe('checkout store', () => {
     expect(store.state.product).toEqual(secondProduct)
   })
 
+  it('persists cart products, clamps quantities and removes lines', () => {
+    const secondProduct = { ...product, id: 'product-2', slug: 'product-2', stock: 5 }
+    const store = createCheckoutStore()
+    store.commit('setData', { products: [product, secondProduct], config })
+
+    store.commit('addToCart', product)
+    store.commit('addToCart', secondProduct)
+    store.commit('updateCartQuantity', {
+      productId: product.id,
+      quantity: 99,
+    })
+    expect(store.state.cart).toEqual([
+      { productId: product.id, quantity: 2 },
+      { productId: secondProduct.id, quantity: 1 },
+    ])
+    expect(window.localStorage.getItem('checkout-cart')).toContain(product.id)
+
+    store.commit('removeFromCart', product.id)
+    expect(store.state.cart).toEqual([{ productId: secondProduct.id, quantity: 1 }])
+    store.commit('clearCart')
+    expect(store.state.cart).toEqual([])
+  })
+
+  it('restores valid cart lines and prunes unavailable products', () => {
+    window.localStorage.setItem(
+      'checkout-cart',
+      JSON.stringify([
+        { productId: product.id, quantity: 20 },
+        { productId: 'missing', quantity: 1 },
+      ]),
+    )
+    const store = createCheckoutStore()
+    store.commit('setData', { products, config })
+
+    expect(store.state.cart).toEqual([{ productId: product.id, quantity: 2 }])
+  })
+
   it('reports HTTP and network errors while always clearing loading', async () => {
     globalThis.fetch = jest
       .fn()

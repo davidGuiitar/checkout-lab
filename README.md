@@ -1,6 +1,6 @@
 # Checkout Lab
 
-Checkout de un catálogo de cuatro productos construido con Vue 3 + Vuex y NestJS + Prisma +
+Checkout con carrito para un catálogo de cuatro productos construido con Vue 3 + Vuex y NestJS + Prisma +
 PostgreSQL. Incluye tokenización cifrada, pagos sandbox, inventario atómico,
 recuperación tras refresh, pruebas con umbral obligatorio de cobertura y una
 infraestructura reproducible para AWS.
@@ -12,9 +12,9 @@ Repositorio canónico:
 
 El flujo cubre las cinco vistas de la prueba:
 
-1. Catálogo de productos, precios, cantidades e inventario disponible.
+1. Catálogo con carrito persistente, distintos productos, cantidades e inventario disponible.
 2. Datos personales, entrega y tarjeta con validación inmediata.
-3. Resumen de producto, tarifa base, envío y total.
+3. Resumen de todas las líneas del carrito, tarifa base, envío y total.
 4. Procesamiento y recuperación segura de una transacción pendiente.
 5. Resultado aprobado, rechazado, anulado o con error.
 
@@ -56,15 +56,15 @@ sequenceDiagram
   participant D as PostgreSQL
   participant G as Sandbox de pagos
 
-  U->>V: Confirma datos y tarjeta
+  U->>V: Agrega productos y confirma datos
   V->>A: Solicita configuración pública
   V->>V: Valida y cifra tarjeta como JWE
   V->>A: Envía JWE para tokenización
   A->>G: Tokeniza tarjeta
   G-->>A: Token efímero
   A-->>V: Token efímero
-  V->>A: Crea checkout con token
-  A->>D: Reserva inventario y crea PENDING
+  V->>A: Crea checkout con items y token
+  A->>D: Reserva todo el carrito y crea PENDING
   A->>G: Crea y consulta transacción
   G-->>A: Estado final
   A->>D: Confirma stock o libera reserva
@@ -76,7 +76,9 @@ sequenceDiagram
 
 ```mermaid
 erDiagram
-  Product ||--o{ Transaction : recibe
+  Product ||--o{ TransactionItem : contiene
+  Transaction ||--|{ TransactionItem : agrupa
+  Product ||--o{ Transaction : legado
   Customer ||--o{ Transaction : crea
   Delivery ||--o{ Transaction : usa
 
@@ -110,10 +112,18 @@ erDiagram
     string providerTransactionId UK
     string failureReason
   }
+  TransactionItem {
+    uuid id PK
+    uuid transactionId FK
+    uuid productId FK
+    int quantity
+    int unitPrice
+    int amount
+  }
 ```
 
-La reserva incrementa `reservedStock` por la cantidad solicitada mediante un
-`UPDATE` condicional. Solo un pago `APPROVED` descuenta esas unidades de
+La reserva incrementa `reservedStock` para cada línea del carrito mediante
+`UPDATE` condicionales dentro de una única transacción. Solo un pago `APPROVED` descuenta esas unidades de
 `stock`; cualquier otro estado libera la reserva. La
 actualización condicional del estado evita descontar dos veces al reconsultar.
 
@@ -221,12 +231,13 @@ Cobertura global verificada con Jest el 31 de julio de 2026:
 
 | Aplicación | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| Frontend | 90,17% | 85,34% | 91,34% | 92,30% |
-| Backend | 98,94% | 91,93% | 97,61% | 98,79% |
+| Frontend | 91,79% | 87,08% | 92,48% | 93,95% |
+| Backend | 99,06% | 91,02% | 97,95% | 98,94% |
 
 Ambas configuraciones imponen 80% global en statements, branches, functions y
-lines. Las E2E usan PostgreSQL real y cubren aprobado, rechazado, error de red,
-sin stock, refresh, concurrencia, validación, CORS, headers y rate limiting.
+lines. Las E2E usan PostgreSQL real y cubren carritos con productos diferentes,
+aprobado, rechazado, error de red, inventario atómico, refresh, concurrencia,
+validación, CORS, headers y rate limiting.
 
 ## Seguridad
 

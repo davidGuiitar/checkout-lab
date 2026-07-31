@@ -21,6 +21,14 @@ interface CheckoutResult {
   total: number
   quantity: number
   product: { id: string; name: string; stock: number }
+  items: Array<{
+    productId: string
+    name: string
+    quantity: number
+    unitPrice: number
+    amount: number
+    stock: number
+  }>
 }
 
 const store = useStore<CheckoutState>()
@@ -32,7 +40,6 @@ const isPaying = ref(false)
 const paymentError = ref<string | null>(null)
 const paymentToken = ref<string | null>(null)
 const transaction = ref<CheckoutResult | null>(null)
-const quantity = ref(1)
 const isCvcFocused = ref(false)
 const acceptedTerms = ref(false)
 const acceptedPersonalData = ref(false)
@@ -40,10 +47,23 @@ const card = reactive({ number: '', expiry: '', cvc: '' })
 const form = reactive<CheckoutDraft>({ ...store.state.draft })
 
 const products = computed(() => store.state.products)
-const product = computed(() => store.state.product)
 const config = computed(() => store.state.config)
+const cartItems = computed(() =>
+  store.state.cart.flatMap((item) => {
+    const product = products.value.find(({ id }) => id === item.productId)
+    return product ? [{ ...item, product }] : []
+  }),
+)
+const cartCount = computed(() =>
+  cartItems.value.reduce((sum, item) => sum + item.quantity, 0),
+)
 const brand = computed(() => detectCardBrand(card.number))
-const productSubtotal = computed(() => (product.value?.price ?? 0) * quantity.value)
+const productSubtotal = computed(() =>
+  cartItems.value.reduce(
+    (sum, item) => sum + item.product.price * item.quantity,
+    0,
+  ),
+)
 const total = computed(
   () => productSubtotal.value + config.value.baseFee + config.value.deliveryFee,
 )
@@ -88,12 +108,16 @@ const detailsValidationMessage = computed(() => {
     return 'Las notas deben tener máximo 240 caracteres.'
   }
   if (
-    !product.value ||
-    !Number.isInteger(quantity.value) ||
-    quantity.value < 1 ||
-    quantity.value > Math.min(product.value.stock, 100)
+    !cartItems.value.length ||
+    cartCount.value > 100 ||
+    cartItems.value.some(
+      (item) =>
+        !Number.isInteger(item.quantity) ||
+        item.quantity < 1 ||
+        item.quantity > item.product.stock,
+    )
   ) {
-    return 'Selecciona una cantidad disponible válida.'
+    return 'Revisa las cantidades disponibles del carrito.'
   }
   if (
     !Number.isInteger(form.installments) ||
@@ -187,10 +211,13 @@ function productIcon(slug: string): string {
   )
 }
 
-function openForm(selectedProduct?: Product): void {
-  if (selectedProduct) {
-    store.commit('selectProduct', selectedProduct)
-    quantity.value = 1
+function addToCart(product: Product): void {
+  store.commit('addToCart', product)
+}
+
+function openForm(editing = false): void {
+  if (!cartItems.value.length) return
+  if (!editing) {
     clearCard()
     acceptedTerms.value = false
     acceptedPersonalData.value = false
@@ -202,13 +229,12 @@ function openForm(selectedProduct?: Product): void {
   isFormOpen.value = true
 }
 
-function updateQuantity(value: number): void {
-  const maximum = product.value?.stock ?? 1
-  quantity.value = Math.min(maximum, Math.max(1, Math.trunc(value) || 1))
+function updateQuantity(productId: string, value: number): void {
+  store.commit('updateCartQuantity', { productId, quantity: value })
 }
 
 async function confirmPayment(): Promise<void> {
-  if (!product.value || !paymentToken.value) return
+  if (!cartItems.value.length || !paymentToken.value) return
   isPaying.value = true
   paymentError.value = null
 
@@ -217,8 +243,10 @@ async function confirmPayment(): Promise<void> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        productId: product.value.id,
-        quantity: quantity.value,
+        items: cartItems.value.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        })),
         customer: {
           fullName: form.fullName,
           email: form.email,
@@ -249,6 +277,7 @@ async function confirmPayment(): Promise<void> {
     showSummary.value = false
     paymentToken.value = null
     clearCard()
+    if (body.status === 'APPROVED') store.commit('clearCart')
     if (body.status === 'PENDING') void pollTransaction(body.reference)
   } catch (error: unknown) {
     paymentError.value =
@@ -272,7 +301,10 @@ async function pollTransaction(reference: string): Promise<void> {
     try {
       const current = await fetchTransaction(reference)
       transaction.value = current
-      if (current.status !== 'PENDING') return
+      if (current.status !== 'PENDING') {
+        if (current.status === 'APPROVED') store.commit('clearCart')
+        return
+      }
     } catch {
       paymentError.value = 'Seguiremos consultando el resultado de forma segura.'
     }
@@ -284,6 +316,7 @@ async function recoverTransaction(): Promise<void> {
   if (!reference) return
   try {
     transaction.value = await fetchTransaction(reference)
+    if (transaction.value.status === 'APPROVED') store.commit('clearCart')
     if (transaction.value.status === 'PENDING') void pollTransaction(reference)
   } catch {
     window.localStorage.removeItem('checkout-transaction-reference')
@@ -319,10 +352,17 @@ onMounted(async () => {
   <main class="checkout-shell">
     <section class="checkout-card catalog" aria-labelledby="checkout-title">
       <p class="eyebrow">Compra segura</p>
-      <h1 id="checkout-title">Elige tu producto</h1>
-      <p class="catalog-description">
-        Tecnología para todos los días, con pago y entrega seguros.
-      </p>
+      <div class="catalog-heading">
+        <div>
+          <h1 id="checkout-title">Elige tus productos</h1>
+          <p class="catalog-description">
+            Tecnología para todos los días, con pago y entrega seguros.
+          </p>
+        </div>
+        <span class="cart-badge" aria-live="polite">
+          🛒 {{ cartCount }} unidad{{ cartCount === 1 ? '' : 'es' }}
+        </span>
+      </div>
       <div v-if="store.state.isLoading" class="loading" aria-live="polite">
         Cargando productos…
       </div>
@@ -336,26 +376,110 @@ onMounted(async () => {
           Reintentar
         </button>
       </div>
-      <div v-else-if="products.length" class="product-grid">
-        <article v-for="item in products" :key="item.id" class="product-card">
-          <div class="product-icon" aria-hidden="true">{{ productIcon(item.slug) }}</div>
-          <h2>{{ item.name }}</h2>
-          <p class="description">{{ item.description }}</p>
-          <div class="product-meta">
-            <strong>{{ formatCop(item.price) }}</strong>
-            <span :class="{ soldout: item.stock === 0 }">
-              {{ item.stock }} unidades disponibles
-            </span>
+      <div v-else-if="products.length" class="catalog-layout">
+        <div class="product-grid">
+          <article v-for="item in products" :key="item.id" class="product-card">
+            <div class="product-icon" aria-hidden="true">
+              {{ productIcon(item.slug) }}
+            </div>
+            <h2>{{ item.name }}</h2>
+            <p class="description">{{ item.description }}</p>
+            <div class="product-meta">
+              <strong>{{ formatCop(item.price) }}</strong>
+              <span :class="{ soldout: item.stock === 0 }">
+                {{ item.stock }} unidades disponibles
+              </span>
+            </div>
+            <p
+              v-if="store.state.cart.some(({ productId }) => productId === item.id)"
+              class="in-cart"
+            >
+              ✓ Producto agregado
+            </p>
+            <button
+              class="primary-button"
+              type="button"
+              :disabled="item.stock === 0"
+              @click="addToCart(item)"
+            >
+              Agregar al carrito
+            </button>
+          </article>
+        </div>
+
+        <aside class="cart-panel" aria-labelledby="cart-title">
+          <div class="cart-title-row">
+            <div>
+              <p class="eyebrow">Tu compra</p>
+              <h2 id="cart-title">Carrito</h2>
+            </div>
+            <span>{{ cartCount }}</span>
+          </div>
+          <p v-if="!cartItems.length" class="empty-cart">
+            Agrega uno o varios productos para comenzar.
+          </p>
+          <div v-else class="cart-lines">
+            <article v-for="item in cartItems" :key="item.productId" class="cart-line">
+              <div class="cart-line-heading">
+                <span aria-hidden="true">{{ productIcon(item.product.slug) }}</span>
+                <div>
+                  <strong>{{ item.product.name }}</strong>
+                  <small>{{ formatCop(item.product.price) }} c/u</small>
+                </div>
+                <button
+                  type="button"
+                  class="remove-button"
+                  :aria-label="`Quitar ${item.product.name}`"
+                  @click="store.commit('removeFromCart', item.productId)"
+                >
+                  ×
+                </button>
+              </div>
+              <div class="cart-line-footer">
+                <div class="quantity-control compact">
+                  <button
+                    type="button"
+                    :aria-label="`Disminuir ${item.product.name}`"
+                    :disabled="item.quantity <= 1"
+                    @click="updateQuantity(item.productId, item.quantity - 1)"
+                  >
+                    −
+                  </button>
+                  <input
+                    :value="item.quantity"
+                    type="number"
+                    inputmode="numeric"
+                    min="1"
+                    :max="item.product.stock"
+                    :aria-label="`Cantidad de ${item.product.name}`"
+                    @change="updateQuantity(item.productId, Number(($event.target as HTMLInputElement).value))"
+                  />
+                  <button
+                    type="button"
+                    :aria-label="`Aumentar ${item.product.name}`"
+                    :disabled="item.quantity >= item.product.stock || cartCount >= 100"
+                    @click="updateQuantity(item.productId, item.quantity + 1)"
+                  >
+                    +
+                  </button>
+                </div>
+                <strong>{{ formatCop(item.product.price * item.quantity) }}</strong>
+              </div>
+            </article>
+          </div>
+          <div class="cart-total">
+            <span>Subtotal</span>
+            <strong>{{ formatCop(productSubtotal) }}</strong>
           </div>
           <button
             class="primary-button"
             type="button"
-            :disabled="item.stock === 0"
-            @click="openForm(item)"
+            :disabled="!cartItems.length"
+            @click="openForm(false)"
           >
-            Pagar con tarjeta
+            Ir a pagar
           </button>
-        </article>
+        </aside>
       </div>
       <div v-else class="alert" role="alert">No hay productos disponibles.</div>
     </section>
@@ -382,42 +506,12 @@ onMounted(async () => {
         </button>
         <p class="eyebrow">Paso 1 de 2</p>
         <h2 id="details-title">Datos de pago y entrega</h2>
-        <div v-if="product" class="quantity-panel">
+        <div class="quantity-panel order-overview">
           <div>
-            <strong>{{ product.name }}</strong>
-            <span>{{ formatCop(product.price) }} por unidad</span>
+            <strong>{{ cartItems.length }} producto{{ cartItems.length === 1 ? '' : 's' }}</strong>
+            <span>{{ cartCount }} unidad{{ cartCount === 1 ? '' : 'es' }} en el carrito</span>
           </div>
-          <label>
-            Cantidad
-            <div class="quantity-control">
-              <button
-                type="button"
-                aria-label="Disminuir cantidad"
-                :disabled="quantity <= 1"
-                @click="updateQuantity(quantity - 1)"
-              >
-                −
-              </button>
-              <input
-                v-model.number="quantity"
-                name="quantity"
-                type="number"
-                inputmode="numeric"
-                min="1"
-                :max="product.stock"
-                required
-                @change="updateQuantity(quantity)"
-              />
-              <button
-                type="button"
-                aria-label="Aumentar cantidad"
-                :disabled="quantity >= product.stock"
-                @click="updateQuantity(quantity + 1)"
-              >
-                +
-              </button>
-            </div>
-          </label>
+          <strong>{{ formatCop(productSubtotal) }}</strong>
         </div>
         <fieldset>
           <legend>Datos personales</legend>
@@ -587,14 +681,14 @@ onMounted(async () => {
       </form>
     </div>
 
-    <div v-if="showSummary && product" class="backdrop" role="presentation">
+    <div v-if="showSummary && cartItems.length" class="backdrop" role="presentation">
       <section class="modal summary" aria-labelledby="summary-title">
         <p class="eyebrow">Paso 2 de 2</p>
         <h2 id="summary-title">Resumen de pago</h2>
         <dl>
-          <div>
-            <dt>{{ product.name }} × {{ quantity }}</dt>
-            <dd>{{ formatCop(productSubtotal) }}</dd>
+          <div v-for="item in cartItems" :key="item.productId">
+            <dt>{{ item.product.name }} × {{ item.quantity }}</dt>
+            <dd>{{ formatCop(item.product.price * item.quantity) }}</dd>
           </div>
           <div><dt>Tarifa base</dt><dd>{{ formatCop(config.baseFee) }}</dd></div>
           <div><dt>Envío</dt><dd>{{ formatCop(config.deliveryFee) }}</dd></div>
@@ -613,7 +707,7 @@ onMounted(async () => {
           class="text-button"
           type="button"
           :disabled="isPaying"
-          @click="showSummary = false; openForm()"
+          @click="showSummary = false; openForm(true)"
         >
           Editar datos
         </button>
@@ -629,7 +723,13 @@ onMounted(async () => {
         <h2 id="result-title">{{ statusTitle(transaction.status) }}</h2>
         <p>Referencia: <strong>{{ transaction.reference }}</strong></p>
         <p>Total: <strong>{{ formatCop(transaction.total) }}</strong></p>
-        <p>Cantidad: <strong>{{ transaction.quantity }}</strong></p>
+        <p>Unidades: <strong>{{ transaction.quantity }}</strong></p>
+        <ul v-if="transaction.items?.length" class="result-items">
+          <li v-for="item in transaction.items" :key="item.productId">
+            <span>{{ item.name }} × {{ item.quantity }}</span>
+            <strong>{{ formatCop(item.amount) }}</strong>
+          </li>
+        </ul>
         <p v-if="transaction.status === 'PENDING'">Estamos verificando el estado final.</p>
         <p v-if="paymentError" class="field-error">{{ paymentError }}</p>
         <button
