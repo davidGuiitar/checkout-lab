@@ -16,8 +16,8 @@ describe('CheckoutService', () => {
     name: 'Product',
     description: 'Description',
     price: 100_000,
-    stock: 1,
-    reservedStock: 1,
+    stock: 2,
+    reservedStock: 2,
     isFeatured: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -29,10 +29,11 @@ describe('CheckoutService', () => {
     productId: product.id,
     customerId: 'customer-id',
     deliveryId: 'delivery-id',
-    productAmount: product.price,
+    quantity: 2,
+    productAmount: product.price * 2,
     baseFee: 2_000,
     deliveryFee: 8_000,
-    total: 110_000,
+    total: 210_000,
     providerTransactionId: null,
     failureReason: null,
     createdAt: new Date(),
@@ -40,6 +41,7 @@ describe('CheckoutService', () => {
   };
   const dto: CreateCheckoutDto = {
     productId: product.id,
+    quantity: 2,
     customer: {
       fullName: 'Test Customer',
       email: 'test@example.com',
@@ -135,19 +137,20 @@ describe('CheckoutService', () => {
       new CheckoutService(prisma, gateway).create(dto),
     ).resolves.toMatchObject({
       status: TransactionStatus.APPROVED,
-      total: 110_000,
+      total: 210_000,
+      quantity: 2,
       product: { stock: 0 },
     });
 
     expect(updateProduct).toHaveBeenCalledWith({
       where: { id: product.id },
       data: {
-        stock: { decrement: 1 },
-        reservedStock: { decrement: 1 },
+        stock: { decrement: 2 },
+        reservedStock: { decrement: 2 },
       },
     });
     expect(createGatewayTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ amountInCents: 11_000_000 }),
+      expect.objectContaining({ amountInCents: 21_000_000 }),
     );
   });
 
@@ -161,7 +164,7 @@ describe('CheckoutService', () => {
     ).rejects.toThrow(BadGatewayException);
     expect(updateProduct).toHaveBeenCalledWith({
       where: { id: product.id },
-      data: { reservedStock: { decrement: 1 } },
+      data: { reservedStock: { decrement: 2 } },
     });
   });
 
@@ -211,7 +214,7 @@ describe('CheckoutService', () => {
     ).resolves.toMatchObject({ status: TransactionStatus.DECLINED });
     expect(updateProduct).toHaveBeenCalledWith({
       where: { id: product.id },
-      data: { reservedStock: { decrement: 1 } },
+      data: { reservedStock: { decrement: 2 } },
     });
   });
 

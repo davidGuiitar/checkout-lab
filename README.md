@@ -12,7 +12,7 @@ Repositorio canónico:
 
 El flujo cubre las cinco vistas de la prueba:
 
-1. Catálogo de productos, precios e inventario disponible.
+1. Catálogo de productos, precios, cantidades e inventario disponible.
 2. Datos personales, entrega y tarjeta con validación inmediata.
 3. Resumen de producto, tarifa base, envío y total.
 4. Procesamiento y recuperación segura de una transacción pendiente.
@@ -102,14 +102,16 @@ erDiagram
     uuid id PK
     string reference UK
     enum status
+    int quantity
     int total
     string providerTransactionId UK
     string failureReason
   }
 ```
 
-La reserva incrementa `reservedStock` con un `UPDATE` condicional. Solo un pago
-`APPROVED` decrementa `stock`; cualquier otro estado libera la reserva. La
+La reserva incrementa `reservedStock` por la cantidad solicitada mediante un
+`UPDATE` condicional. Solo un pago `APPROVED` descuenta esas unidades de
+`stock`; cualquier otro estado libera la reserva. La
 actualización condicional del estado evita descontar dos veces al reconsultar.
 
 ## Requisitos locales
@@ -212,11 +214,11 @@ pnpm --dir backend test:cov --runInBand
 pnpm --dir backend test:e2e --runInBand
 ```
 
-Cobertura global verificada con Jest el 30 de julio de 2026:
+Cobertura global verificada con Jest el 31 de julio de 2026:
 
 | Aplicación | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| Frontend | 90,70% | 85,94% | 90,52% | 93,40% |
+| Frontend | 90,80% | 85,78% | 90,09% | 93,41% |
 | Backend | 98,94% | 91,93% | 97,61% | 98,79% |
 
 Ambas configuraciones imponen 80% global en statements, branches, functions y

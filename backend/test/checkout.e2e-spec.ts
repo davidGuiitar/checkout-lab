@@ -72,8 +72,9 @@ describe('Checkout flow (e2e)', () => {
   let prisma: PrismaService;
   let productId: string;
 
-  const payload = (paymentToken: string) => ({
+  const payload = (paymentToken: string, quantity = 1) => ({
     productId,
+    quantity,
     customer: {
       fullName: 'E2E Customer',
       email: `checkout-${randomUUID()}@e2e.invalid`,
@@ -153,6 +154,28 @@ describe('Checkout flow (e2e)', () => {
     await expect(
       prisma.product.findUniqueOrThrow({ where: { id: productId } }),
     ).resolves.toMatchObject({ stock: 0, reservedStock: 0 });
+  });
+
+  it('charges and decrements the requested quantity', async () => {
+    await prisma.product.update({
+      where: { id: productId },
+      data: { stock: 5 },
+    });
+
+    const result = await request(app.getHttpServer())
+      .post('/checkout')
+      .send(payload('tok_test_approved', 3))
+      .expect(201);
+
+    expect(result.body).toMatchObject({
+      status: 'APPROVED',
+      quantity: 3,
+      total: 310_000,
+      product: { stock: 2 },
+    });
+    await expect(
+      prisma.product.findUniqueOrThrow({ where: { id: productId } }),
+    ).resolves.toMatchObject({ stock: 2, reservedStock: 0 });
   });
 
   it('keeps inventory for declined and network-error payments', async () => {
@@ -241,6 +264,14 @@ describe('Checkout flow (e2e)', () => {
         cardNumber: 'not-accepted',
         cvc: 'not-accepted',
       })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post('/checkout')
+      .send(payload('tok_test_approved', 0))
+      .expect(400);
+    await request(app.getHttpServer())
+      .post('/checkout')
+      .send(payload('tok_test_approved', 101))
       .expect(400);
     await request(app.getHttpServer())
       .get('/transactions/invalid-reference')

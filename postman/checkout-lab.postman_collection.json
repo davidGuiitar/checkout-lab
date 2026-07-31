@@ -86,7 +86,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"customer\": {\n    \"fullName\": \"Cliente de Prueba\",\n    \"email\": \"cliente@example.com\",\n    \"phone\": \"3000000000\"\n  },\n  \"delivery\": {\n    \"recipientName\": \"Cliente de Prueba\",\n    \"address\": \"Dirección de prueba\",\n    \"city\": \"Bogotá\",\n    \"department\": \"Cundinamarca\"\n  },\n  \"paymentToken\": \"{{paymentToken}}\",\n  \"installments\": 1,\n  \"acceptedTerms\": true,\n  \"acceptedPersonalData\": true\n}"
+          "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 2,\n  \"customer\": {\n    \"fullName\": \"Cliente de Prueba\",\n    \"email\": \"cliente@example.com\",\n    \"phone\": \"3000000000\"\n  },\n  \"delivery\": {\n    \"recipientName\": \"Cliente de Prueba\",\n    \"address\": \"Dirección de prueba\",\n    \"city\": \"Bogotá\",\n    \"department\": \"Cundinamarca\"\n  },\n  \"paymentToken\": \"{{paymentToken}}\",\n  \"installments\": 1,\n  \"acceptedTerms\": true,\n  \"acceptedPersonalData\": true\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/checkout",

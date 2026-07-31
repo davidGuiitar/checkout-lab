@@ -28,6 +28,7 @@ export interface CheckoutResult {
   reference: string;
   status: TransactionStatus;
   total: number;
+  quantity: number;
   product: {
     id: string;
     name: string;
@@ -105,9 +106,9 @@ export class CheckoutService {
     return this.prisma.$transaction(async (database) => {
       const products = await database.$queryRaw<Product[]>(Prisma.sql`
         UPDATE "Product"
-        SET "reservedStock" = "reservedStock" + 1
+        SET "reservedStock" = "reservedStock" + ${dto.quantity}
         WHERE "id" = ${dto.productId}
-          AND "stock" > "reservedStock"
+          AND "stock" - "reservedStock" >= ${dto.quantity}
         RETURNING *
       `);
       const product = products[0];
@@ -117,16 +118,17 @@ export class CheckoutService {
           where: { id: dto.productId },
         });
         if (!exists) throw new NotFoundException('Producto no encontrado.');
-        throw new ConflictException('No hay unidades disponibles.');
+        throw new ConflictException('No hay suficientes unidades disponibles.');
       }
 
       return database.transaction.create({
         data: {
           reference,
-          productAmount: product.price,
+          quantity: dto.quantity,
+          productAmount: product.price * dto.quantity,
           baseFee: BASE_FEE,
           deliveryFee: DELIVERY_FEE,
-          total: product.price + BASE_FEE + DELIVERY_FEE,
+          total: product.price * dto.quantity + BASE_FEE + DELIVERY_FEE,
           product: {
             connect: { id: product.id },
           },
@@ -179,10 +181,10 @@ export class CheckoutService {
         data:
           status === 'APPROVED'
             ? {
-                stock: { decrement: 1 },
-                reservedStock: { decrement: 1 },
+                stock: { decrement: transaction.quantity },
+                reservedStock: { decrement: transaction.quantity },
               }
-            : { reservedStock: { decrement: 1 } },
+            : { reservedStock: { decrement: transaction.quantity } },
       });
     });
   }
@@ -215,6 +217,7 @@ export class CheckoutService {
       reference: transaction.reference,
       status: transaction.status,
       total: transaction.total,
+      quantity: transaction.quantity,
       product: {
         id: transaction.product.id,
         name: transaction.product.name,

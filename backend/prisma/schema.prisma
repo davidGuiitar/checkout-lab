@@ -56,6 +56,7 @@ model Transaction {
   productId             String
   customerId            String
   deliveryId            String
+  quantity              Int               @default(1)
   productAmount         Int
   baseFee               Int
   deliveryFee           Int

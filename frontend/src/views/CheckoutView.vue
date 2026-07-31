@@ -18,6 +18,7 @@ interface CheckoutResult {
   reference: string
   status: PaymentStatus
   total: number
+  quantity: number
   product: { id: string; name: string; stock: number }
 }
 
@@ -30,6 +31,7 @@ const isPaying = ref(false)
 const paymentError = ref<string | null>(null)
 const paymentToken = ref<string | null>(null)
 const transaction = ref<CheckoutResult | null>(null)
+const quantity = ref(1)
 const acceptedTerms = ref(false)
 const acceptedPersonalData = ref(false)
 const card = reactive({ number: '', expiry: '', cvc: '' })
@@ -39,8 +41,9 @@ const products = computed(() => store.state.products)
 const product = computed(() => store.state.product)
 const config = computed(() => store.state.config)
 const brand = computed(() => detectCardBrand(card.number))
+const productSubtotal = computed(() => (product.value?.price ?? 0) * quantity.value)
 const total = computed(
-  () => (product.value?.price ?? 0) + config.value.baseFee + config.value.deliveryFee,
+  () => productSubtotal.value + config.value.baseFee + config.value.deliveryFee,
 )
 const cardValid = computed(
   () =>
@@ -144,7 +147,10 @@ function productIcon(slug: string): string {
 }
 
 function openForm(selectedProduct?: Product): void {
-  if (selectedProduct) store.commit('selectProduct', selectedProduct)
+  if (selectedProduct) {
+    store.commit('selectProduct', selectedProduct)
+    quantity.value = 1
+  }
   Object.assign(form, store.state.draft)
   attemptedSubmit.value = false
   paymentError.value = null
@@ -152,6 +158,11 @@ function openForm(selectedProduct?: Product): void {
   acceptedTerms.value = false
   acceptedPersonalData.value = false
   isFormOpen.value = true
+}
+
+function updateQuantity(value: number): void {
+  const maximum = product.value?.stock ?? 1
+  quantity.value = Math.min(maximum, Math.max(1, Math.trunc(value) || 1))
 }
 
 async function confirmPayment(): Promise<void> {
@@ -165,6 +176,7 @@ async function confirmPayment(): Promise<void> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         productId: product.value.id,
+        quantity: quantity.value,
         customer: {
           fullName: form.fullName,
           email: form.email,
@@ -322,6 +334,43 @@ onMounted(async () => {
         </button>
         <p class="eyebrow">Paso 1 de 2</p>
         <h2 id="details-title">Datos de pago y entrega</h2>
+        <div v-if="product" class="quantity-panel">
+          <div>
+            <strong>{{ product.name }}</strong>
+            <span>{{ formatCop(product.price) }} por unidad</span>
+          </div>
+          <label>
+            Cantidad
+            <div class="quantity-control">
+              <button
+                type="button"
+                aria-label="Disminuir cantidad"
+                :disabled="quantity <= 1"
+                @click="updateQuantity(quantity - 1)"
+              >
+                −
+              </button>
+              <input
+                v-model.number="quantity"
+                name="quantity"
+                type="number"
+                inputmode="numeric"
+                min="1"
+                :max="product.stock"
+                required
+                @change="updateQuantity(quantity)"
+              />
+              <button
+                type="button"
+                aria-label="Aumentar cantidad"
+                :disabled="quantity >= product.stock"
+                @click="updateQuantity(quantity + 1)"
+              >
+                +
+              </button>
+            </div>
+          </label>
+        </div>
         <fieldset>
           <legend>Datos personales</legend>
           <label>
@@ -449,8 +498,8 @@ onMounted(async () => {
         <h2 id="summary-title">Resumen de pago</h2>
         <dl>
           <div>
-            <dt>{{ product.name }}</dt>
-            <dd>{{ formatCop(product.price) }}</dd>
+            <dt>{{ product.name }} × {{ quantity }}</dt>
+            <dd>{{ formatCop(productSubtotal) }}</dd>
           </div>
           <div><dt>Tarifa base</dt><dd>{{ formatCop(config.baseFee) }}</dd></div>
           <div><dt>Envío</dt><dd>{{ formatCop(config.deliveryFee) }}</dd></div>
@@ -485,6 +534,7 @@ onMounted(async () => {
         <h2 id="result-title">{{ statusTitle(transaction.status) }}</h2>
         <p>Referencia: <strong>{{ transaction.reference }}</strong></p>
         <p>Total: <strong>{{ formatCop(transaction.total) }}</strong></p>
+        <p>Cantidad: <strong>{{ transaction.quantity }}</strong></p>
         <p v-if="transaction.status === 'PENDING'">Estamos verificando el estado final.</p>
         <p v-if="paymentError" class="field-error">{{ paymentError }}</p>
         <button

@@ -42,6 +42,7 @@ describe('CheckoutView', () => {
     reference: 'CHK-9fe5923f-7fef-4a5c-99fc-20db7464c774',
     status: 'APPROVED',
     total: 110_000,
+    quantity: 1,
     product: { id: product.id, name: product.name, stock: 1 },
   }
 
@@ -154,6 +155,7 @@ describe('CheckoutView', () => {
     const requestBody = String((checkoutCall?.[1] as RequestInit).body)
     const parsedRequest = JSON.parse(requestBody) as Record<string, unknown>
     expect(parsedRequest.paymentToken).toBe('tok_test_safe')
+    expect(parsedRequest.quantity).toBe(1)
     expect(parsedRequest).not.toHaveProperty('card')
     expect(parsedRequest).not.toHaveProperty('cvc')
     expect(window.localStorage.getItem('checkout-draft')).not.toContain(
@@ -173,10 +175,12 @@ describe('CheckoutView', () => {
     const productCards = wrapper.findAll('.product-card')
 
     await productCards[1].get('button').trigger('click')
+    await wrapper.get('input[name="quantity"]').setValue(3)
     await fillValidFormFields(wrapper)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(wrapper.text()).toContain('Second Product')
+    expect(wrapper.text()).toContain('Second Product × 3')
 
     await button(wrapper, 'Confirmar pago').trigger('click')
     await flushPromises()
@@ -187,8 +191,22 @@ describe('CheckoutView', () => {
     )
     const body = JSON.parse(
       String((checkoutCall?.[1] as RequestInit).body),
-    ) as { productId: string }
+    ) as { productId: string; quantity: number }
     expect(body.productId).toBe(secondProduct.id)
+    expect(body.quantity).toBe(3)
+  })
+
+  it('keeps quantity within the available inventory', async () => {
+    const { wrapper } = await mountView()
+    await button(wrapper, 'Pagar con tarjeta').trigger('click')
+    const quantityInput = wrapper.get('input[name="quantity"]')
+
+    await quantityInput.setValue(99)
+    await quantityInput.trigger('change')
+    expect((quantityInput.element as HTMLInputElement).value).toBe('2')
+
+    await wrapper.get('button[aria-label="Disminuir cantidad"]').trigger('click')
+    expect((quantityInput.element as HTMLInputElement).value).toBe('1')
   })
 
   it('validates the form and reports tokenization errors', async () => {
