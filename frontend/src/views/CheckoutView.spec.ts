@@ -93,7 +93,9 @@ describe('CheckoutView', () => {
     await wrapper
       .get('input[autocomplete="cc-number"]')
       .setValue(['4111', '1111', '1111', '1111'].join(' '))
-    await wrapper.get('input[autocomplete="cc-exp"]').setValue('12/30')
+    const expiry = wrapper.get('input[autocomplete="cc-exp"]')
+    await expiry.setValue('1230')
+    expect((expiry.element as HTMLInputElement).value).toBe('12/30')
     await wrapper.get('input[autocomplete="cc-csc"]').setValue('123')
     const contracts = wrapper.findAll('input[type="checkbox"]')
     await contracts[0].setValue(true)
@@ -154,7 +156,7 @@ describe('CheckoutView', () => {
     const { wrapper } = await mountView()
     await button(wrapper, 'Pagar con tarjeta').trigger('click')
     await wrapper.get('form').trigger('submit')
-    expect(wrapper.text()).toContain('Revisa los datos')
+    expect(wrapper.text()).toContain('Revisa los datos personales y de entrega')
     expect(tokenizeCardMock).not.toHaveBeenCalled()
 
     await fillValidForm(wrapper)

@@ -4,6 +4,7 @@ import { useStore } from 'vuex'
 import { tokenizeCard } from '../lib/payment-gateway'
 import {
   detectCardBrand,
+  formatExpiryInput,
   isValidCvc,
   isValidExpiry,
   isValidLuhn,
@@ -66,6 +67,14 @@ const formValid = computed(
     acceptedTerms.value &&
     acceptedPersonalData.value,
 )
+const validationMessage = computed(() => {
+  if (!personalValid.value) return 'Revisa los datos personales y de entrega.'
+  if (!cardValid.value) return 'Revisa el número, vencimiento y CVC de la tarjeta.'
+  if (!acceptedTerms.value || !acceptedPersonalData.value) {
+    return 'Acepta ambos contratos para continuar.'
+  }
+  return null
+})
 
 function formatCop(value: number): string {
   return new Intl.NumberFormat('es-CO', {
@@ -79,6 +88,10 @@ function formatCardNumber(): void {
   card.number = normalizeCardNumber(card.number)
     .slice(0, 19)
     .replace(/(\d{4})(?=\d)/g, '$1 ')
+}
+
+function formatExpiry(): void {
+  card.expiry = formatExpiryInput(card.expiry)
 }
 
 function clearCard(): void {
@@ -345,6 +358,7 @@ onMounted(async () => {
                 placeholder="MM/AA"
                 maxlength="5"
                 required
+                @input="formatExpiry"
               />
             </label>
             <label>
@@ -396,8 +410,8 @@ onMounted(async () => {
             </span>
           </label>
         </fieldset>
-        <p v-if="attemptedSubmit && !formValid" class="field-error" role="alert">
-          Revisa los datos y acepta ambos contratos.
+        <p v-if="attemptedSubmit && validationMessage" class="field-error" role="alert">
+          {{ validationMessage }}
         </p>
         <p v-if="paymentError" class="field-error" role="alert">{{ paymentError }}</p>
         <button class="primary-button" type="submit" :disabled="isTokenizing">

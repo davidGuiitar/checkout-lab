@@ -1,5 +1,6 @@
 import {
   detectCardBrand,
+  formatExpiryInput,
   isValidCvc,
   isValidExpiry,
   isValidLuhn,
@@ -35,5 +36,13 @@ describe('payment validators', () => {
     expect(isValidCvc('1234', 'Mastercard')).toBe(false)
     expect(isValidCvc('1234', 'Visa')).toBe(true)
     expect(isValidCvc('12', 'Visa')).toBe(false)
+  })
+
+  it('formats expiry digits as MM/AA', () => {
+    expect(formatExpiryInput('1')).toBe('1')
+    expect(formatExpiryInput('11')).toBe('11')
+    expect(formatExpiryInput('113')).toBe('11/3')
+    expect(formatExpiryInput('11/30')).toBe('11/30')
+    expect(formatExpiryInput('113099')).toBe('11/30')
   })
 })
