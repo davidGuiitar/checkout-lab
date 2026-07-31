@@ -54,18 +54,57 @@ const cardValid = computed(
     isValidExpiry(card.expiry) &&
     isValidCvc(card.cvc, brand.value),
 )
-const personalValid = computed(() =>
-  Boolean(
-    form.fullName &&
-      form.email.includes('@') &&
-      form.phone &&
-      form.recipientName &&
-      form.address &&
-      form.city &&
-      form.department &&
-      form.installments > 0,
-  ),
-)
+const detailsValidationMessage = computed(() => {
+  const fullName = form.fullName.trim()
+  const email = form.email.trim()
+  const phone = form.phone.trim()
+  const recipientName = form.recipientName.trim()
+  const address = form.address.trim()
+  const city = form.city.trim()
+  const department = form.department.trim()
+
+  if (fullName.length < 3 || fullName.length > 100) {
+    return 'El nombre completo debe tener entre 3 y 100 caracteres.'
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 160) {
+    return 'Ingresa un correo electrónico válido.'
+  }
+  if (!/^\+?[0-9]{7,15}$/.test(phone)) {
+    return 'El teléfono debe contener entre 7 y 15 dígitos.'
+  }
+  if (recipientName.length < 3 || recipientName.length > 100) {
+    return 'El nombre de quien recibe debe tener entre 3 y 100 caracteres.'
+  }
+  if (address.length < 5 || address.length > 180) {
+    return 'La dirección debe tener entre 5 y 180 caracteres.'
+  }
+  if (!city || city.length > 80) {
+    return 'La ciudad es obligatoria y debe tener máximo 80 caracteres.'
+  }
+  if (!department || department.length > 80) {
+    return 'El departamento es obligatorio y debe tener máximo 80 caracteres.'
+  }
+  if (form.notes.trim().length > 240) {
+    return 'Las notas deben tener máximo 240 caracteres.'
+  }
+  if (
+    !product.value ||
+    !Number.isInteger(quantity.value) ||
+    quantity.value < 1 ||
+    quantity.value > Math.min(product.value.stock, 100)
+  ) {
+    return 'Selecciona una cantidad disponible válida.'
+  }
+  if (
+    !Number.isInteger(form.installments) ||
+    form.installments < 1 ||
+    form.installments > 12
+  ) {
+    return 'Selecciona entre 1 y 12 cuotas.'
+  }
+  return null
+})
+const personalValid = computed(() => detailsValidationMessage.value === null)
 const formValid = computed(
   () =>
     personalValid.value &&
@@ -74,7 +113,7 @@ const formValid = computed(
     acceptedPersonalData.value,
 )
 const validationMessage = computed(() => {
-  if (!personalValid.value) return 'Revisa los datos personales y de entrega.'
+  if (detailsValidationMessage.value) return detailsValidationMessage.value
   if (!cardValid.value) return 'Revisa el número, vencimiento y CVC de la tarjeta.'
   if (!acceptedTerms.value || !acceptedPersonalData.value) {
     return 'Acepta ambos contratos para continuar.'
@@ -127,7 +166,6 @@ async function submitDetails(): Promise<void> {
       },
     )
     store.commit('saveDraft', { ...form })
-    clearCard()
     isFormOpen.value = false
     showSummary.value = true
   } catch (error: unknown) {
@@ -153,13 +191,14 @@ function openForm(selectedProduct?: Product): void {
   if (selectedProduct) {
     store.commit('selectProduct', selectedProduct)
     quantity.value = 1
+    clearCard()
+    acceptedTerms.value = false
+    acceptedPersonalData.value = false
   }
   Object.assign(form, store.state.draft)
   attemptedSubmit.value = false
   paymentError.value = null
   paymentToken.value = null
-  acceptedTerms.value = false
-  acceptedPersonalData.value = false
   isFormOpen.value = true
 }
 
@@ -209,6 +248,7 @@ async function confirmPayment(): Promise<void> {
     window.localStorage.setItem('checkout-transaction-reference', body.reference)
     showSummary.value = false
     paymentToken.value = null
+    clearCard()
     if (body.status === 'PENDING') void pollTransaction(body.reference)
   } catch (error: unknown) {
     paymentError.value =
@@ -326,7 +366,12 @@ onMounted(async () => {
       role="presentation"
       @click.self="isFormOpen = false"
     >
-      <form class="modal" aria-labelledby="details-title" @submit.prevent="submitDetails">
+      <form
+        class="modal"
+        aria-labelledby="details-title"
+        novalidate
+        @submit.prevent="submitDetails"
+      >
         <button
           class="close-button"
           type="button"
@@ -378,31 +423,69 @@ onMounted(async () => {
           <legend>Datos personales</legend>
           <label>
             Nombre completo
-            <input v-model.trim="form.fullName" autocomplete="name" required />
+            <input
+              v-model.trim="form.fullName"
+              autocomplete="name"
+              minlength="3"
+              maxlength="100"
+              required
+            />
           </label>
           <label>
             Correo electrónico
-            <input v-model.trim="form.email" type="email" autocomplete="email" required />
+            <input
+              v-model.trim="form.email"
+              type="email"
+              autocomplete="email"
+              maxlength="160"
+              required
+            />
           </label>
           <label>
             Teléfono
-            <input v-model.trim="form.phone" inputmode="tel" autocomplete="tel" required />
+            <input
+              v-model.trim="form.phone"
+              inputmode="tel"
+              autocomplete="tel"
+              pattern="\+?[0-9]{7,15}"
+              required
+            />
           </label>
         </fieldset>
         <fieldset>
           <legend>Entrega</legend>
-          <label>Recibe<input v-model.trim="form.recipientName" required /></label>
+          <label>
+            Recibe
+            <input
+              v-model.trim="form.recipientName"
+              minlength="3"
+              maxlength="100"
+              required
+            />
+          </label>
           <label>
             Dirección
-            <input v-model.trim="form.address" autocomplete="street-address" required />
+            <input
+              v-model.trim="form.address"
+              autocomplete="street-address"
+              minlength="5"
+              maxlength="180"
+              required
+            />
           </label>
           <div class="two-columns">
-            <label>Ciudad<input v-model.trim="form.city" required /></label>
-            <label>Departamento<input v-model.trim="form.department" required /></label>
+            <label>
+              Ciudad
+              <input v-model.trim="form.city" maxlength="80" required />
+            </label>
+            <label>
+              Departamento
+              <input v-model.trim="form.department" maxlength="80" required />
+            </label>
           </div>
           <label>
             Notas opcionales
-            <textarea v-model.trim="form.notes" rows="2" />
+            <textarea v-model.trim="form.notes" rows="2" maxlength="240" />
           </label>
         </fieldset>
         <fieldset>

@@ -234,7 +234,9 @@ describe('CheckoutView', () => {
     const { wrapper } = await mountView()
     await button(wrapper, 'Pagar con tarjeta').trigger('click')
     await wrapper.get('form').trigger('submit')
-    expect(wrapper.text()).toContain('Revisa los datos personales y de entrega')
+    expect(wrapper.text()).toContain(
+      'El nombre completo debe tener entre 3 y 100 caracteres.',
+    )
     expect(tokenizeCardMock).not.toHaveBeenCalled()
 
     await fillValidForm(wrapper)
@@ -243,6 +245,51 @@ describe('CheckoutView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Tokenization unavailable')
     expect(wrapper.text()).toContain('Datos de pago y entrega')
+  })
+
+  it('validates a short address before the summary and preserves data when editing', async () => {
+    const { wrapper } = await mountView()
+    await fillValidForm(wrapper)
+    const address = wrapper.get('input[autocomplete="street-address"]')
+    await address.setValue('ab')
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain(
+      'La dirección debe tener entre 5 y 180 caracteres.',
+    )
+    expect(wrapper.text()).not.toContain('Resumen de pago')
+    expect(tokenizeCardMock).not.toHaveBeenCalled()
+
+    await address.setValue('Calle 123')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Resumen de pago')
+
+    await button(wrapper, 'Editar datos').trigger('click')
+    expect(
+      (
+        wrapper.get('input[autocomplete="street-address"]')
+          .element as HTMLInputElement
+      ).value,
+    ).toBe('Calle 123')
+    expect(
+      (wrapper.get('input[autocomplete="cc-number"]').element as HTMLInputElement)
+        .value,
+    ).toBe('4111 1111 1111 1111')
+    expect(
+      (wrapper.get('input[autocomplete="cc-exp"]').element as HTMLInputElement)
+        .value,
+    ).toBe('12/30')
+    expect(
+      (wrapper.get('input[autocomplete="cc-csc"]').element as HTMLInputElement)
+        .value,
+    ).toBe('123')
+    expect(
+      wrapper
+        .findAll('input[type="checkbox"]')
+        .every((input) => (input.element as HTMLInputElement).checked),
+    ).toBe(true)
   })
 
   it('reports missing configuration and safe checkout API errors', async () => {

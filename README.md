@@ -221,7 +221,7 @@ Cobertura global verificada con Jest el 31 de julio de 2026:
 
 | Aplicación | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| Frontend | 90,88% | 85,96% | 90,29% | 93,48% |
+| Frontend | 90,17% | 85,34% | 91,34% | 92,30% |
 | Backend | 98,94% | 91,93% | 97,61% | 98,79% |
 
 Ambas configuraciones imponen 80% global en statements, branches, functions y
