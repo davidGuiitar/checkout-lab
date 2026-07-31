@@ -146,8 +146,8 @@ describe('CheckoutView', () => {
     const { wrapper, fetchMock } = await mountView()
     expect(wrapper.text()).toContain('Test Product')
     expect(wrapper.text()).toContain('Second Product')
-    expect(wrapper.text()).toContain('2 unidades disponibles')
-    expect(wrapper.text()).toContain('100 unidades disponibles')
+    expect(wrapper.text()).toContain('2 disponibles')
+    expect(wrapper.text()).toContain('100 disponibles')
 
     await fillValidForm(wrapper)
     expect(wrapper.get('.payment-card').attributes('data-brand')).toBe('visa')

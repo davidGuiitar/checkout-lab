@@ -350,20 +350,56 @@ onMounted(async () => {
 
 <template>
   <main class="checkout-shell">
+    <header class="site-header">
+      <a class="brand" href="#checkout-title" aria-label="Checkout Lab, ir al catálogo">
+        <span class="brand-mark" aria-hidden="true">C</span>
+        <span>
+          <strong>Checkout Lab</strong>
+          <small>Tecnología para tu día a día</small>
+        </span>
+      </a>
+      <div class="secure-header-note">
+        <span class="secure-icon" aria-hidden="true">✓</span>
+        <span><strong>Compra protegida</strong><small>Pago cifrado de extremo a extremo</small></span>
+      </div>
+    </header>
+
     <section class="checkout-card catalog" aria-labelledby="checkout-title">
-      <p class="eyebrow">Compra segura</p>
       <div class="catalog-heading">
-        <div>
-          <h1 id="checkout-title">Elige tus productos</h1>
+        <div class="hero-copy">
+          <p class="eyebrow">Compra fácil, entrega segura</p>
+          <h1 id="checkout-title">Elige tus productos favoritos</h1>
           <p class="catalog-description">
-            Tecnología para todos los días, con pago y entrega seguros.
+            Arma tu carrito con tecnología útil, revisa tu compra y paga de forma
+            protegida en pocos pasos.
           </p>
         </div>
+        <div class="hero-art" aria-hidden="true">
+          <span class="hero-orbit orbit-one">⌚</span>
+          <span class="hero-orbit orbit-two">🎧</span>
+          <span class="hero-orbit orbit-three">⌨️</span>
+          <div class="hero-cart-icon">🛒</div>
+        </div>
+      </div>
+
+      <div class="trust-strip" aria-label="Beneficios de compra">
+        <div><span aria-hidden="true">✓</span><p><strong>Pago protegido</strong><small>Datos cifrados</small></p></div>
+        <div><span aria-hidden="true">↗</span><p><strong>Entrega confiable</strong><small>Seguimiento seguro</small></p></div>
+        <div><span aria-hidden="true">↻</span><p><strong>Compra flexible</strong><small>Hasta 12 cuotas</small></p></div>
+      </div>
+
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Catálogo</p>
+          <h2>Productos disponibles</h2>
+        </div>
         <span class="cart-badge" aria-live="polite">
-          🛒 {{ cartCount }} unidad{{ cartCount === 1 ? '' : 'es' }}
+          <span aria-hidden="true">🛒</span>
+          {{ cartCount }} unidad{{ cartCount === 1 ? '' : 'es' }}
         </span>
       </div>
       <div v-if="store.state.isLoading" class="loading" aria-live="polite">
+        <span class="loading-spinner" aria-hidden="true"></span>
         Cargando productos…
       </div>
       <div v-else-if="store.state.error" class="alert" role="alert">
@@ -379,45 +415,55 @@ onMounted(async () => {
       <div v-else-if="products.length" class="catalog-layout">
         <div class="product-grid">
           <article v-for="item in products" :key="item.id" class="product-card">
-            <div class="product-icon" aria-hidden="true">
-              {{ productIcon(item.slug) }}
-            </div>
-            <h2>{{ item.name }}</h2>
-            <p class="description">{{ item.description }}</p>
-            <div class="product-meta">
-              <strong>{{ formatCop(item.price) }}</strong>
-              <span :class="{ soldout: item.stock === 0 }">
-                {{ item.stock }} unidades disponibles
+            <div class="product-visual" :data-product="item.slug">
+              <span class="product-category">Tecnología</span>
+              <div class="product-icon" aria-hidden="true">
+                {{ productIcon(item.slug) }}
+              </div>
+              <span class="stock-pill" :class="{ soldout: item.stock === 0 }">
+                <i aria-hidden="true"></i>
+                {{ item.stock }} disponibles
               </span>
             </div>
-            <p
-              v-if="store.state.cart.some(({ productId }) => productId === item.id)"
-              class="in-cart"
-            >
-              ✓ Producto agregado
-            </p>
-            <button
-              class="primary-button"
-              type="button"
-              :disabled="item.stock === 0"
-              @click="addToCart(item)"
-            >
-              Agregar al carrito
-            </button>
+            <div class="product-content">
+              <h3>{{ item.name }}</h3>
+              <p class="description">{{ item.description }}</p>
+              <div class="product-meta">
+                <span>Precio</span>
+                <strong>{{ formatCop(item.price) }}</strong>
+              </div>
+              <p
+                v-if="store.state.cart.some(({ productId }) => productId === item.id)"
+                class="in-cart"
+              >
+                <span aria-hidden="true">✓</span> Ya está en tu carrito
+              </p>
+              <button
+                class="primary-button add-button"
+                type="button"
+                :disabled="item.stock === 0"
+                @click="addToCart(item)"
+              >
+                <span aria-hidden="true">+</span>
+                Agregar al carrito
+              </button>
+            </div>
           </article>
         </div>
 
         <aside class="cart-panel" aria-labelledby="cart-title">
           <div class="cart-title-row">
             <div>
-              <p class="eyebrow">Tu compra</p>
-              <h2 id="cart-title">Carrito</h2>
+              <p class="eyebrow">Resumen</p>
+              <h2 id="cart-title">Tu carrito</h2>
             </div>
-            <span>{{ cartCount }}</span>
+            <span aria-label="Unidades en el carrito">{{ cartCount }}</span>
           </div>
-          <p v-if="!cartItems.length" class="empty-cart">
-            Agrega uno o varios productos para comenzar.
-          </p>
+          <div v-if="!cartItems.length" class="empty-cart">
+            <span aria-hidden="true">🛒</span>
+            <strong>Tu carrito está vacío</strong>
+            <p>Agrega uno o varios productos para comenzar.</p>
+          </div>
           <div v-else class="cart-lines">
             <article v-for="item in cartItems" :key="item.productId" class="cart-line">
               <div class="cart-line-heading">
@@ -468,7 +514,7 @@ onMounted(async () => {
             </article>
           </div>
           <div class="cart-total">
-            <span>Subtotal</span>
+            <span><small>Subtotal</small><strong>{{ cartCount }} unidad{{ cartCount === 1 ? '' : 'es' }}</strong></span>
             <strong>{{ formatCop(productSubtotal) }}</strong>
           </div>
           <button
@@ -477,8 +523,9 @@ onMounted(async () => {
             :disabled="!cartItems.length"
             @click="openForm(false)"
           >
-            Ir a pagar
+            Ir a pagar <span aria-hidden="true">→</span>
           </button>
+          <p class="cart-security"><span aria-hidden="true">◇</span> Impuestos y envío se calculan al finalizar.</p>
         </aside>
       </div>
       <div v-else class="alert" role="alert">No hay productos disponibles.</div>
@@ -491,7 +538,7 @@ onMounted(async () => {
       @click.self="isFormOpen = false"
     >
       <form
-        class="modal"
+        class="modal checkout-modal"
         aria-labelledby="details-title"
         novalidate
         @submit.prevent="submitDetails"
@@ -504,8 +551,13 @@ onMounted(async () => {
         >
           ×
         </button>
-        <p class="eyebrow">Paso 1 de 2</p>
+        <div class="checkout-progress" aria-label="Paso 1 de 2">
+          <span class="active"><i>1</i> Información</span>
+          <span><i>2</i> Confirmación</span>
+        </div>
+        <p class="eyebrow">Checkout seguro</p>
         <h2 id="details-title">Datos de pago y entrega</h2>
+        <p class="modal-description">Completa tus datos para preparar y proteger la transacción.</p>
         <div class="quantity-panel order-overview">
           <div>
             <strong>{{ cartItems.length }} producto{{ cartItems.length === 1 ? '' : 's' }}</strong>
@@ -513,8 +565,8 @@ onMounted(async () => {
           </div>
           <strong>{{ formatCop(productSubtotal) }}</strong>
         </div>
-        <fieldset>
-          <legend>Datos personales</legend>
+        <fieldset class="form-section">
+          <legend><span>1</span> Datos personales</legend>
           <label>
             Nombre completo
             <input
@@ -522,6 +574,7 @@ onMounted(async () => {
               autocomplete="name"
               minlength="3"
               maxlength="100"
+              placeholder="Nombre y apellido"
               required
             />
           </label>
@@ -532,6 +585,7 @@ onMounted(async () => {
               type="email"
               autocomplete="email"
               maxlength="160"
+              placeholder="nombre@correo.com"
               required
             />
           </label>
@@ -542,18 +596,20 @@ onMounted(async () => {
               inputmode="tel"
               autocomplete="tel"
               pattern="\+?[0-9]{7,15}"
+              placeholder="3001234567"
               required
             />
           </label>
         </fieldset>
-        <fieldset>
-          <legend>Entrega</legend>
+        <fieldset class="form-section">
+          <legend><span>2</span> Información de entrega</legend>
           <label>
             Recibe
             <input
               v-model.trim="form.recipientName"
               minlength="3"
               maxlength="100"
+              placeholder="Persona que recibe"
               required
             />
           </label>
@@ -564,17 +620,18 @@ onMounted(async () => {
               autocomplete="street-address"
               minlength="5"
               maxlength="180"
+              placeholder="Calle, número y complemento"
               required
             />
           </label>
           <div class="two-columns">
             <label>
               Ciudad
-              <input v-model.trim="form.city" maxlength="80" required />
+              <input v-model.trim="form.city" maxlength="80" placeholder="Ciudad" required />
             </label>
             <label>
               Departamento
-              <input v-model.trim="form.department" maxlength="80" required />
+              <input v-model.trim="form.department" maxlength="80" placeholder="Departamento" required />
             </label>
           </div>
           <label>
@@ -582,8 +639,8 @@ onMounted(async () => {
             <textarea v-model.trim="form.notes" rows="2" maxlength="240" />
           </label>
         </fieldset>
-        <fieldset>
-          <legend>Tarjeta</legend>
+        <fieldset class="form-section card-form-section">
+          <legend><span>3</span> Pago con tarjeta</legend>
           <CardPreview
             :number="card.number"
             :holder="form.fullName"
@@ -639,8 +696,8 @@ onMounted(async () => {
             </select>
           </label>
         </fieldset>
-        <fieldset class="contracts">
-          <legend>Autorizaciones</legend>
+        <fieldset class="contracts form-section">
+          <legend><span>4</span> Autorizaciones</legend>
           <label class="checkbox-label">
             <input v-model="acceptedTerms" type="checkbox" />
             <span>
@@ -673,9 +730,10 @@ onMounted(async () => {
         </p>
         <p v-if="paymentError" class="field-error" role="alert">{{ paymentError }}</p>
         <button class="primary-button" type="submit" :disabled="isTokenizing">
-          {{ isTokenizing ? 'Protegiendo datos…' : 'Continuar al resumen' }}
+          {{ isTokenizing ? 'Protegiendo datos…' : 'Continuar al resumen →' }}
         </button>
         <p class="security-note">
+          <span aria-hidden="true">✓</span>
           La tarjeta se cifra y tokeniza directamente; PAN, CVC y token nunca se guardan.
         </p>
       </form>
@@ -683,8 +741,13 @@ onMounted(async () => {
 
     <div v-if="showSummary && cartItems.length" class="backdrop" role="presentation">
       <section class="modal summary" aria-labelledby="summary-title">
-        <p class="eyebrow">Paso 2 de 2</p>
+        <div class="checkout-progress" aria-label="Paso 2 de 2">
+          <span class="completed"><i>✓</i> Información</span>
+          <span class="active"><i>2</i> Confirmación</span>
+        </div>
+        <p class="eyebrow">Último paso</p>
         <h2 id="summary-title">Resumen de pago</h2>
+        <p class="modal-description">Verifica tu pedido antes de procesar el pago.</p>
         <dl>
           <div v-for="item in cartItems" :key="item.productId">
             <dt>{{ item.product.name }} × {{ item.quantity }}</dt>
@@ -742,5 +805,10 @@ onMounted(async () => {
         </button>
       </section>
     </div>
+
+    <footer class="site-footer">
+      <span><strong>Checkout Lab</strong> · Experiencia de compra segura</span>
+      <span>Pagos cifrados · Inventario en tiempo real · Entrega confiable</span>
+    </footer>
   </main>
 </template>
