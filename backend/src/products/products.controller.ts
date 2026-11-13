@@ -2,6 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ProductResponse, ProductsService } from './products.service';
 
+/** Endpoints de solo lectura del catálogo de productos. */
 @ApiTags('products')
 @Controller('products')
 export class ProductsController {

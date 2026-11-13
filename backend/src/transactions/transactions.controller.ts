@@ -8,6 +8,10 @@ import {
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CheckoutResult, CheckoutService } from '../checkout/checkout.service';
 
+/**
+ * Valida que la referencia tenga el formato generado por el checkout:
+ * "CHK-" seguido de un UUID v4. Rechaza cualquier otro valor con 400.
+ */
 export class ParseCheckoutReferencePipe implements PipeTransform<
   string,
   string
@@ -24,6 +28,7 @@ export class ParseCheckoutReferencePipe implements PipeTransform<
   }
 }
 
+/** Consulta de transacciones (usada por el frontend para seguir pagos PENDING). */
 @ApiTags('transactions')
 @Controller('transactions')
 export class TransactionsController {

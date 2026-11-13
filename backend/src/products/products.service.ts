@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 
+/** Producto tal como lo ve el cliente (stock ya descontando reservas). */
 export interface ProductResponse {
   id: string;
   slug: string;
@@ -14,6 +15,7 @@ export interface ProductResponse {
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Catálogo completo: primero los destacados, luego por antigüedad. */
   async getAll(): Promise<ProductResponse[]> {
     const products = await this.prisma.product.findMany({
       orderBy: [{ isFeatured: 'desc' }, { createdAt: 'asc' }],
@@ -22,6 +24,7 @@ export class ProductsService {
     return products.map((product) => this.toResponse(product));
   }
 
+  /** Producto destacado más antiguo; 404 si no hay ninguno. */
   async getFeatured(): Promise<ProductResponse> {
     const product = await this.prisma.product.findFirst({
       where: { isFeatured: true },
@@ -35,6 +38,7 @@ export class ProductsService {
     return this.toResponse(product);
   }
 
+  /** Oculta campos internos y calcula el stock disponible. */
   private toResponse(product: {
     id: string;
     slug: string;
@@ -50,6 +54,7 @@ export class ProductsService {
       name: product.name,
       description: product.description,
       price: product.price,
+      // Las unidades reservadas por pagos en curso no se pueden vender.
       stock: Math.max(0, product.stock - product.reservedStock),
     };
   }

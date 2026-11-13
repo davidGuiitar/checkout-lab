@@ -26,17 +26,21 @@ import {
   VAT_PERCENTAGE,
 } from './checkout-config.service';
 
+/** Transacción cargada junto con su producto principal y sus ítems. */
 type TransactionWithItems = Prisma.TransactionGetPayload<{
   include: { product: true; items: { include: { product: true } } };
 }>;
+/** La pasarela trabaja en centavos; la base de datos guarda pesos. */
 const CENTS_PER_PESO = 100;
 
+/** Respuesta segura del checkout (sin datos sensibles del cliente ni de la tarjeta). */
 export interface CheckoutResult {
   reference: string;
   status: TransactionStatus;
   total: number;
   vatAmount: number;
   quantity: number;
+  /** Primer producto de la compra; se mantiene por compatibilidad. */
   product: {
     id: string;
     name: string;
@@ -52,6 +56,12 @@ export interface CheckoutResult {
   }>;
 }
 
+/**
+ * Orquesta el checkout:
+ * 1. Reserva el stock y crea la transacción local en estado PENDING.
+ * 2. Crea el cobro en la pasarela.
+ * 3. Finaliza la transacción según el resultado (descuenta o libera stock).
+ */
 @Injectable()
 export class CheckoutService {
   constructor(
@@ -60,13 +70,16 @@ export class CheckoutService {
     private readonly gateway: PaymentGateway,
   ) {}
 
+  /** Crea y procesa un checkout completo. */
   async create(
     dto: CreateCheckoutDto,
     customerIp?: string,
   ): Promise<CheckoutResult> {
+    // Paso 1: reservar stock antes de cobrar, para no vender más de lo disponible.
     const localTransaction = await this.reserveProducts(dto);
 
     try {
+      // Paso 2: cobrar en la pasarela con los tokens de aceptación vigentes.
       const contracts = await this.gateway.getMerchantContracts();
       const providerAmountInCents = localTransaction.total * CENTS_PER_PESO;
       const providerTransaction = await this.gateway.createTransaction({
@@ -84,12 +97,15 @@ export class CheckoutService {
         customerIp,
       });
 
+      // Se guarda el id externo para poder consultar el estado más tarde.
       await this.prisma.transaction.update({
         where: { id: localTransaction.id },
         data: { providerTransactionId: providerTransaction.id },
       });
+      // Paso 3: si la pasarela ya respondió con un estado final, se aplica.
       await this.finalize(localTransaction.id, providerTransaction.status);
     } catch {
+      // Cualquier fallo marca la transacción como ERROR y libera la reserva.
       await this.finalize(localTransaction.id, 'ERROR');
       throw new BadGatewayException(
         'No fue posible completar la comunicación con la pasarela.',
@@ -99,6 +115,10 @@ export class CheckoutService {
     return this.getByReference(localTransaction.reference);
   }
 
+  /**
+   * Consulta una transacción por referencia. Si sigue PENDING, pregunta a la
+   * pasarela por su estado actual y la sincroniza antes de responder.
+   */
   async getByReference(reference: string): Promise<CheckoutResult> {
     let transaction = await this.findTransaction(reference);
 
@@ -116,6 +136,10 @@ export class CheckoutService {
     return this.toResult(transaction);
   }
 
+  /**
+   * Normaliza los productos pedidos a una lista de ítems, aceptando el
+   * formato carrito (`items`) o el heredado (`productId` + `quantity`).
+   */
   private requestedItems(dto: CreateCheckoutDto): CheckoutItemDto[] {
     if (dto.items?.length && (dto.productId || dto.quantity)) {
       throw new BadRequestException(
@@ -135,11 +159,17 @@ export class CheckoutService {
         'El carrito no puede superar 100 unidades.',
       );
     }
+    // Se ordena por id para bloquear las filas siempre en el mismo orden y
+    // evitar deadlocks entre compras simultáneas.
     return [...items].sort((left, right) =>
       left.productId.localeCompare(right.productId),
     );
   }
 
+  /**
+   * Reserva el stock de cada producto y crea la transacción PENDING, todo
+   * dentro de una transacción de base de datos (si algo falla, nada se guarda).
+   */
   private async reserveProducts(dto: CreateCheckoutDto): Promise<Transaction> {
     const reference = `CHK-${randomUUID()}`;
     const requestedItems = this.requestedItems(dto);
@@ -147,6 +177,8 @@ export class CheckoutService {
     return this.prisma.$transaction(async (database) => {
       const reservedItems: Array<CheckoutItemDto & { product: Product }> = [];
       for (const item of requestedItems) {
+        // UPDATE atómico: solo reserva si hay unidades libres
+        // (stock - reservedStock). Si no se actualiza ninguna fila, no hay stock.
         const products = await database.$queryRaw<Product[]>(Prisma.sql`
           UPDATE "Product"
           SET "reservedStock" = "reservedStock" + ${item.quantity}
@@ -157,6 +189,7 @@ export class CheckoutService {
         const product = products[0];
 
         if (!product) {
+          // Distingue entre producto inexistente (404) y sin stock (409).
           const exists = await database.product.count({
             where: { id: item.productId },
           });
@@ -176,7 +209,9 @@ export class CheckoutService {
         (sum, item) => sum + item.quantity,
         0,
       );
+      // IVA solo sobre los productos; se redondea a pesos enteros.
       const vatAmount = Math.round((productAmount * VAT_PERCENTAGE) / 100);
+      // Columna productId heredada: se llena con el primer producto.
       const legacyProduct = reservedItems[0].product;
 
       return database.transaction.create({
@@ -187,10 +222,12 @@ export class CheckoutService {
           vatAmount,
           baseFee: BASE_FEE,
           deliveryFee: DELIVERY_FEE,
+          // Total = productos + IVA + tarifa base + envío.
           total: productAmount + vatAmount + BASE_FEE + DELIVERY_FEE,
           product: {
             connect: { id: legacyProduct.id },
           },
+          // Se guarda el precio unitario del momento de la compra.
           items: {
             create: reservedItems.map((item) => ({
               product: { connect: { id: item.product.id } },
@@ -220,6 +257,12 @@ export class CheckoutService {
     });
   }
 
+  /**
+   * Aplica un estado final a la transacción y ajusta el inventario:
+   * - APPROVED: descuenta el stock y libera la reserva.
+   * - Otro estado final: solo libera la reserva.
+   * PENDING no hace nada (aún no hay resultado).
+   */
   private async finalize(
     transactionId: string,
     status: PaymentStatus,
@@ -227,6 +270,8 @@ export class CheckoutService {
     if (status === 'PENDING') return;
 
     await this.prisma.$transaction(async (database) => {
+      // Solo actualiza si sigue PENDING; así el inventario se ajusta una sola
+      // vez aunque finalize se llame varias veces (idempotente).
       const updated = await database.transaction.updateMany({
         where: {
           id: transactionId,
@@ -238,12 +283,14 @@ export class CheckoutService {
         },
       });
 
+      // Otra petición ya la finalizó: no tocar el inventario de nuevo.
       if (!updated.count) return;
 
       const transaction = await database.transaction.findUniqueOrThrow({
         where: { id: transactionId },
         include: { items: true },
       });
+      // Transacciones antiguas (sin ítems) usan productId/quantity directamente.
       const inventoryItems = transaction.items.length
         ? transaction.items
         : [
@@ -267,6 +314,10 @@ export class CheckoutService {
     });
   }
 
+  /**
+   * Firma de integridad exigida por la pasarela:
+   * SHA-256 de referencia + monto en centavos + moneda + secreto.
+   */
   private signature(reference: string, total: number): string {
     const secret = process.env.PAYMENT_INTEGRITY_SECRET;
     if (!secret) {
@@ -277,6 +328,7 @@ export class CheckoutService {
       .digest('hex');
   }
 
+  /** Busca una transacción con sus ítems o lanza 404. */
   private async findTransaction(
     reference: string,
   ): Promise<TransactionWithItems> {
@@ -290,7 +342,9 @@ export class CheckoutService {
     return transaction;
   }
 
+  /** Convierte la transacción de base de datos en la respuesta pública. */
   private toResult(transaction: TransactionWithItems): CheckoutResult {
+    // Transacciones antiguas sin ítems se representan como un único ítem.
     const items = transaction.items.length
       ? transaction.items
       : [
@@ -311,6 +365,7 @@ export class CheckoutService {
       product: {
         id: transaction.product.id,
         name: transaction.product.name,
+        // Stock disponible = stock total - unidades reservadas.
         stock: Math.max(
           0,
           transaction.product.stock - transaction.product.reservedStock,

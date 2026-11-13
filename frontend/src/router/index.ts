@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import CheckoutView from '../views/CheckoutView.vue'
 
+// La app tiene una sola vista: el checkout en la raíz.
 const router = createRouter({
   history: createWebHistory(),
   routes: [

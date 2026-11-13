@@ -1,5 +1,6 @@
 import { createStore } from 'vuex'
 
+/** Producto del catálogo (stock = unidades disponibles para vender). */
 export interface Product {
   id: string
   slug: string
@@ -9,11 +10,13 @@ export interface Product {
   stock: number
 }
 
+/** Ítem del carrito: solo se guarda el id y la cantidad. */
 export interface CartItem {
   productId: string
   quantity: number
 }
 
+/** Configuración pública recibida de GET /checkout/config. */
 export interface CheckoutConfig {
   baseFee: number
   deliveryFee: number
@@ -27,6 +30,7 @@ export interface CheckoutConfig {
   } | null
 }
 
+/** Datos del formulario que se guardan para no reescribirlos (sin tarjeta). */
 export interface CheckoutDraft {
   fullName: string
   email: string
@@ -39,6 +43,7 @@ export interface CheckoutDraft {
   installments: number
 }
 
+/** Estado global de la aplicación. */
 export interface CheckoutState {
   apiUrl: string
   products: Product[]
@@ -50,6 +55,7 @@ export interface CheckoutState {
   error: string | null
 }
 
+/** Borrador vacío por defecto. */
 const emptyDraft = (): CheckoutDraft => ({
   fullName: '',
   email: '',
@@ -62,6 +68,7 @@ const emptyDraft = (): CheckoutDraft => ({
   installments: 1,
 })
 
+/** Recupera el borrador de localStorage; si falla, usa uno vacío. */
 function loadDraft(): CheckoutDraft {
   try {
     const saved = window.localStorage.getItem('checkout-draft')
@@ -71,6 +78,7 @@ function loadDraft(): CheckoutDraft {
   }
 }
 
+/** Recupera el carrito de localStorage descartando ítems con formato inválido. */
 function loadCart(): CartItem[] {
   try {
     const saved = JSON.parse(window.localStorage.getItem('checkout-cart') ?? '[]')
@@ -86,12 +94,15 @@ function loadCart(): CartItem[] {
   }
 }
 
+/** Guarda el carrito para que sobreviva a recargas de la página. */
 function persistCart(cart: CartItem[]): void {
   window.localStorage.setItem('checkout-cart', JSON.stringify(cart))
 }
 
+// __API_URL__ se inyecta en build desde vite.config.ts.
 const apiUrl = typeof __API_URL__ === 'string' ? __API_URL__ : 'http://localhost:3000'
 
+/** Crea el store (función fábrica para poder crear instancias nuevas en pruebas). */
 export function createCheckoutStore() {
   return createStore<CheckoutState>({
     state: {
@@ -99,6 +110,7 @@ export function createCheckoutStore() {
       products: [],
       product: null,
       cart: loadCart(),
+      // Valores por defecto hasta recibir la configuración del backend.
       config: {
         baseFee: 2_000,
         deliveryFee: 8_000,
@@ -116,8 +128,10 @@ export function createCheckoutStore() {
       setLoading(state, payload) {
         state.isLoading = Boolean(payload)
       },
+      /** Guarda productos y configuración, y ajusta el carrito al stock actual. */
       setData(state, payload) {
         const data = payload as { products: Product[]; config: CheckoutConfig }
+        // Conserva el producto seleccionado si sigue existiendo.
         const selectedId = state.product?.id
         state.products = data.products
         state.product =
@@ -125,12 +139,15 @@ export function createCheckoutStore() {
         state.config = {
           ...state.config,
           ...data.config,
+          // Si el backend no envía un IVA válido, se usa 19%.
           vatPercentage:
             typeof data.config.vatPercentage === 'number' &&
             Number.isFinite(data.config.vatPercentage)
               ? data.config.vatPercentage
               : 19,
         }
+        // Quita productos que ya no existen y recorta cantidades al stock
+        // disponible (si queda en 0, el ítem se elimina).
         state.cart = state.cart
           .map((item) => {
             const product = data.products.find(({ id }) => id === item.productId)
@@ -145,6 +162,7 @@ export function createCheckoutStore() {
         const product = payload as Product
         state.product = state.products.find(({ id }) => id === product.id) ?? null
       },
+      /** Agrega una unidad, respetando el stock y el máximo de 100 unidades. */
       addToCart(state, payload) {
         const product = payload as Product
         const existing = state.cart.find(({ productId }) => productId === product.id)
@@ -160,6 +178,7 @@ export function createCheckoutStore() {
         }
         persistCart(state.cart)
       },
+      /** Cambia la cantidad: mínimo 1, sin pasar el stock ni 100 unidades en total. */
       updateCartQuantity(state, payload) {
         const { productId, quantity } = payload as CartItem
         const item = state.cart.find((candidate) => candidate.productId === productId)
@@ -187,12 +206,14 @@ export function createCheckoutStore() {
       setError(state, payload) {
         state.error = payload ? String(payload) : null
       },
+      /** Actualiza y persiste el borrador del formulario. */
       saveDraft(state, payload) {
         state.draft = { ...state.draft, ...(payload as Partial<CheckoutDraft>) }
         window.localStorage.setItem('checkout-draft', JSON.stringify(state.draft))
       },
     },
     actions: {
+      /** Carga en paralelo el catálogo y la configuración del checkout. */
       async fetchCheckoutData({ commit, state }) {
         commit('setLoading', true)
         commit('setError', null)
@@ -221,4 +242,5 @@ export function createCheckoutStore() {
   })
 }
 
+// Instancia única usada por la aplicación.
 export default createCheckoutStore()

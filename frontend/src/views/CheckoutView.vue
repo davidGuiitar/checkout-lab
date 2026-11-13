@@ -13,8 +13,17 @@ import {
 } from '../lib/payment-validators'
 import type { CheckoutDraft, CheckoutState, Product } from '../store'
 
+/**
+ * Vista principal: catálogo, carrito, formulario de pago, resumen y
+ * resultado de la transacción.
+ *
+ * Flujo: agregar al carrito -> llenar datos y tarjeta -> tokenizar ->
+ * confirmar en el resumen -> POST /checkout -> mostrar (y seguir) el estado.
+ */
+
 type PaymentStatus = 'PENDING' | 'APPROVED' | 'DECLINED' | 'VOIDED' | 'ERROR'
 
+/** Respuesta del backend al crear o consultar una transacción. */
 interface CheckoutResult {
   reference: string
   status: PaymentStatus
@@ -33,22 +42,29 @@ interface CheckoutResult {
 }
 
 const store = useStore<CheckoutState>()
+
+// --- Estado local de la vista ---
 const isFormOpen = ref(false)
 const showSummary = ref(false)
 const attemptedSubmit = ref(false)
 const isTokenizing = ref(false)
 const isPaying = ref(false)
 const paymentError = ref<string | null>(null)
+// Token de tarjeta obtenido al tokenizar; se usa una sola vez al pagar.
 const paymentToken = ref<string | null>(null)
 const transaction = ref<CheckoutResult | null>(null)
 const isCvcFocused = ref(false)
 const acceptedTerms = ref(false)
 const acceptedPersonalData = ref(false)
+// Datos de la tarjeta: solo en memoria, nunca en el store ni en localStorage.
 const card = reactive({ number: '', expiry: '', cvc: '' })
+// Copia editable del borrador guardado.
 const form = reactive<CheckoutDraft>({ ...store.state.draft })
 
+// --- Valores derivados ---
 const products = computed(() => store.state.products)
 const config = computed(() => store.state.config)
+// Ítems del carrito con su producto completo (ignora productos inexistentes).
 const cartItems = computed(() =>
   store.state.cart.flatMap((item) => {
     const product = products.value.find(({ id }) => id === item.productId)
@@ -65,6 +81,7 @@ const productSubtotal = computed(() =>
     0,
   ),
 )
+// Mismo cálculo que el backend: IVA solo sobre productos, redondeado.
 const vatAmount = computed(() =>
   Math.round((productSubtotal.value * config.value.vatPercentage) / 100),
 )
@@ -82,6 +99,8 @@ const cardValid = computed(
     isValidExpiry(card.expiry) &&
     isValidCvc(card.cvc, brand.value),
 )
+// Valida datos personales, envío, carrito y cuotas con las mismas reglas
+// del backend. Devuelve el primer error encontrado o null si todo es válido.
 const detailsValidationMessage = computed(() => {
   const fullName = form.fullName.trim()
   const email = form.email.trim()
@@ -144,6 +163,7 @@ const formValid = computed(
     acceptedTerms.value &&
     acceptedPersonalData.value,
 )
+// Mensaje de error a mostrar tras intentar enviar el formulario.
 const validationMessage = computed(() => {
   if (detailsValidationMessage.value) return detailsValidationMessage.value
   if (!cardValid.value) return 'Revisa el número, vencimiento y CVC de la tarjeta.'
@@ -153,6 +173,9 @@ const validationMessage = computed(() => {
   return null
 })
 
+// --- Utilidades de formato ---
+
+/** Formatea un valor como moneda colombiana, p. ej. "$ 12.000". */
 function formatCop(value: number): string {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
@@ -161,6 +184,7 @@ function formatCop(value: number): string {
   }).format(value)
 }
 
+/** Deja el número como "1234 5678 9012 3456" (máx. 19 dígitos). */
 function formatCardNumber(): void {
   card.number = normalizeCardNumber(card.number)
     .slice(0, 19)
@@ -171,6 +195,7 @@ function formatExpiry(): void {
   card.expiry = formatExpiryInput(card.expiry)
 }
 
+/** Borra los datos de la tarjeta de la memoria. */
 function clearCard(): void {
   card.number = ''
   card.expiry = ''
@@ -178,6 +203,12 @@ function clearCard(): void {
   isCvcFocused.value = false
 }
 
+// --- Acciones del flujo de pago ---
+
+/**
+ * Envía el formulario: valida, tokeniza la tarjeta y, si todo sale bien,
+ * guarda el borrador y pasa al resumen de confirmación.
+ */
 async function submitDetails(): Promise<void> {
   attemptedSubmit.value = true
   paymentError.value = null
@@ -208,6 +239,7 @@ async function submitDetails(): Promise<void> {
   }
 }
 
+/** Emoji representativo de cada producto según su slug. */
 function productIcon(slug: string): string {
   return (
     {
@@ -223,6 +255,10 @@ function addToCart(product: Product): void {
   store.commit('addToCart', product)
 }
 
+/**
+ * Abre el formulario de pago. Con `editing = true` (volver desde el resumen)
+ * se conservan la tarjeta y las aceptaciones; si no, se limpian.
+ */
 function openForm(editing = false): void {
   if (!cartItems.value.length) return
   if (!editing) {
@@ -233,6 +269,7 @@ function openForm(editing = false): void {
   Object.assign(form, store.state.draft)
   attemptedSubmit.value = false
   paymentError.value = null
+  // El token anterior se descarta: se tokeniza de nuevo al enviar.
   paymentToken.value = null
   isFormOpen.value = true
 }
@@ -241,6 +278,7 @@ function updateQuantity(productId: string, value: number): void {
   store.commit('updateCartQuantity', { productId, quantity: value })
 }
 
+/** Crea el checkout en el backend con el token de la tarjeta. */
 async function confirmPayment(): Promise<void> {
   if (!cartItems.value.length || !paymentToken.value) return
   isPaying.value = true
@@ -281,10 +319,12 @@ async function confirmPayment(): Promise<void> {
     }
 
     transaction.value = body
+    // Se guarda la referencia para recuperar el resultado si se recarga la página.
     window.localStorage.setItem('checkout-transaction-reference', body.reference)
     showSummary.value = false
     paymentToken.value = null
     clearCard()
+    // Aprobado: se vacía el carrito. Pendiente: se consulta hasta tener resultado.
     if (body.status === 'APPROVED') store.commit('clearCart')
     if (body.status === 'PENDING') void pollTransaction(body.reference)
   } catch (error: unknown) {
@@ -295,6 +335,7 @@ async function confirmPayment(): Promise<void> {
   }
 }
 
+/** Consulta el estado de una transacción por su referencia. */
 async function fetchTransaction(reference: string): Promise<CheckoutResult> {
   const response = await fetch(
     `${store.state.apiUrl}/transactions/${encodeURIComponent(reference)}`,
@@ -303,6 +344,7 @@ async function fetchTransaction(reference: string): Promise<CheckoutResult> {
   return (await response.json()) as CheckoutResult
 }
 
+/** Consulta cada segundo (máx. 10 intentos) hasta que el pago deje de estar PENDING. */
 async function pollTransaction(reference: string): Promise<void> {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     await new Promise((resolve) => window.setTimeout(resolve, 1_000))
@@ -319,6 +361,7 @@ async function pollTransaction(reference: string): Promise<void> {
   }
 }
 
+/** Al cargar la página, recupera la última transacción guardada (si existe). */
 async function recoverTransaction(): Promise<void> {
   const reference = window.localStorage.getItem('checkout-transaction-reference')
   if (!reference) return
@@ -331,6 +374,7 @@ async function recoverTransaction(): Promise<void> {
   }
 }
 
+/** Cierra el resultado y recarga el catálogo con el stock actualizado. */
 async function returnToProduct(): Promise<void> {
   transaction.value = null
   paymentError.value = null
@@ -338,6 +382,7 @@ async function returnToProduct(): Promise<void> {
   await store.dispatch('fetchCheckoutData')
 }
 
+/** Título legible para cada estado del pago. */
 function statusTitle(status: PaymentStatus): string {
   return (
     {
@@ -350,6 +395,7 @@ function statusTitle(status: PaymentStatus): string {
   )[status]
 }
 
+// Al montar: carga datos y retoma un pago en curso si lo hay.
 onMounted(async () => {
   await store.dispatch('fetchCheckoutData')
   await recoverTransaction()
