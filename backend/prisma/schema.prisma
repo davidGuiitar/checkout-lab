@@ -59,6 +59,7 @@ model Transaction {
   deliveryId            String
   quantity              Int               @default(1)
   productAmount         Int
+  vatAmount             Int               @default(0)
   baseFee               Int
   deliveryFee           Int
   total                 Int

@@ -14,7 +14,7 @@ El flujo cubre las cinco vistas de la prueba:
 
 1. Catálogo con carrito persistente, distintos productos, cantidades e inventario disponible.
 2. Datos personales, entrega y tarjeta con validación inmediata.
-3. Resumen de todas las líneas del carrito, tarifa base, envío y total.
+3. Resumen de todas las líneas del carrito, IVA del 19% aplicado solo a productos, tarifa base, envío y total.
 4. Procesamiento y recuperación segura de una transacción pendiente.
 5. Resultado aprobado, rechazado, anulado o con error.
 
@@ -108,6 +108,7 @@ erDiagram
     string reference UK
     enum status
     int quantity
+    int vatAmount
     int total
     string providerTransactionId UK
     string failureReason

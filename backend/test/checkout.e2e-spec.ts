@@ -182,7 +182,8 @@ describe('Checkout flow (e2e)', () => {
 
     expect(result.body).toMatchObject({
       status: 'APPROVED',
-      total: 110_000,
+      vatAmount: 19_000,
+      total: 129_000,
       product: { stock: 0 },
     });
     await expect(
@@ -204,7 +205,8 @@ describe('Checkout flow (e2e)', () => {
     expect(result.body).toMatchObject({
       status: 'APPROVED',
       quantity: 3,
-      total: 310_000,
+      vatAmount: 57_000,
+      total: 367_000,
       product: { stock: 2 },
     });
     await expect(
@@ -223,15 +225,40 @@ describe('Checkout flow (e2e)', () => {
       .send(cartPayload('tok_test_approved'))
       .expect(201);
 
-    expect(result.body).toMatchObject({
+    const body = result.body as {
+      status: string;
+      quantity: number;
+      vatAmount: number;
+      total: number;
+      items: Array<{
+        productId: string;
+        quantity: number;
+        amount: number;
+        stock: number;
+      }>;
+    };
+    expect(body).toMatchObject({
       status: 'APPROVED',
       quantity: 5,
-      total: 360_000,
-      items: [
-        { productId, quantity: 2, amount: 200_000, stock: 2 },
-        { productId: secondProductId, quantity: 3, amount: 150_000, stock: 2 },
-      ].sort((left, right) => left.productId.localeCompare(right.productId)),
+      vatAmount: 66_500,
+      total: 426_500,
     });
+    expect(body.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          productId,
+          quantity: 2,
+          amount: 200_000,
+          stock: 2,
+        }),
+        expect.objectContaining({
+          productId: secondProductId,
+          quantity: 3,
+          amount: 150_000,
+          stock: 2,
+        }),
+      ]),
+    );
     await expect(
       prisma.product.findMany({
         where: { id: { in: [productId, secondProductId] } },

@@ -17,6 +17,7 @@ export interface CartItem {
 export interface CheckoutConfig {
   baseFee: number
   deliveryFee: number
+  vatPercentage: number
   paymentPublicKey: string | null
   paymentApiUrl: string | null
   tokenizationKey: string | null
@@ -101,6 +102,7 @@ export function createCheckoutStore() {
       config: {
         baseFee: 2_000,
         deliveryFee: 8_000,
+        vatPercentage: 19,
         paymentPublicKey: null,
         paymentApiUrl: null,
         tokenizationKey: null,
@@ -120,7 +122,15 @@ export function createCheckoutStore() {
         state.products = data.products
         state.product =
           data.products.find(({ id }) => id === selectedId) ?? data.products[0] ?? null
-        state.config = data.config
+        state.config = {
+          ...state.config,
+          ...data.config,
+          vatPercentage:
+            typeof data.config.vatPercentage === 'number' &&
+            Number.isFinite(data.config.vatPercentage)
+              ? data.config.vatPercentage
+              : 19,
+        }
         state.cart = state.cart
           .map((item) => {
             const product = data.products.find(({ id }) => id === item.productId)

@@ -20,7 +20,11 @@ import type {
   PaymentStatus,
 } from './domain/payment-gateway.port';
 import { CheckoutItemDto, CreateCheckoutDto } from './dto/create-checkout.dto';
-import { BASE_FEE, DELIVERY_FEE } from './checkout-config.service';
+import {
+  BASE_FEE,
+  DELIVERY_FEE,
+  VAT_PERCENTAGE,
+} from './checkout-config.service';
 
 type TransactionWithItems = Prisma.TransactionGetPayload<{
   include: { product: true; items: { include: { product: true } } };
@@ -31,6 +35,7 @@ export interface CheckoutResult {
   reference: string;
   status: TransactionStatus;
   total: number;
+  vatAmount: number;
   quantity: number;
   product: {
     id: string;
@@ -171,6 +176,7 @@ export class CheckoutService {
         (sum, item) => sum + item.quantity,
         0,
       );
+      const vatAmount = Math.round((productAmount * VAT_PERCENTAGE) / 100);
       const legacyProduct = reservedItems[0].product;
 
       return database.transaction.create({
@@ -178,9 +184,10 @@ export class CheckoutService {
           reference,
           quantity: totalQuantity,
           productAmount,
+          vatAmount,
           baseFee: BASE_FEE,
           deliveryFee: DELIVERY_FEE,
-          total: productAmount + BASE_FEE + DELIVERY_FEE,
+          total: productAmount + vatAmount + BASE_FEE + DELIVERY_FEE,
           product: {
             connect: { id: legacyProduct.id },
           },
@@ -299,6 +306,7 @@ export class CheckoutService {
       reference: transaction.reference,
       status: transaction.status,
       total: transaction.total,
+      vatAmount: transaction.vatAmount,
       quantity: transaction.quantity,
       product: {
         id: transaction.product.id,

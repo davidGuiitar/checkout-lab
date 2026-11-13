@@ -19,6 +19,7 @@ interface CheckoutResult {
   reference: string
   status: PaymentStatus
   total: number
+  vatAmount: number
   quantity: number
   product: { id: string; name: string; stock: number }
   items: Array<{
@@ -64,8 +65,15 @@ const productSubtotal = computed(() =>
     0,
   ),
 )
+const vatAmount = computed(() =>
+  Math.round((productSubtotal.value * config.value.vatPercentage) / 100),
+)
 const total = computed(
-  () => productSubtotal.value + config.value.baseFee + config.value.deliveryFee,
+  () =>
+    productSubtotal.value +
+    vatAmount.value +
+    config.value.baseFee +
+    config.value.deliveryFee,
 )
 const cardValid = computed(
   () =>
@@ -752,6 +760,10 @@ onMounted(async () => {
           <div v-for="item in cartItems" :key="item.productId">
             <dt>{{ item.product.name }} × {{ item.quantity }}</dt>
             <dd>{{ formatCop(item.product.price * item.quantity) }}</dd>
+          </div>
+          <div>
+            <dt>IVA ({{ config.vatPercentage }}%)</dt>
+            <dd>{{ formatCop(vatAmount) }}</dd>
           </div>
           <div><dt>Tarifa base</dt><dd>{{ formatCop(config.baseFee) }}</dd></div>
           <div><dt>Envío</dt><dd>{{ formatCop(config.deliveryFee) }}</dd></div>

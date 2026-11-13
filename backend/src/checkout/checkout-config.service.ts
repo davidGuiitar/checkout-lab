@@ -4,10 +4,12 @@ import type { PaymentGateway } from './domain/payment-gateway.port';
 
 export const BASE_FEE = 2_000;
 export const DELIVERY_FEE = 8_000;
+export const VAT_PERCENTAGE = 19;
 
 export interface CheckoutConfig {
   baseFee: number;
   deliveryFee: number;
+  vatPercentage: number;
   paymentPublicKey: string | null;
   paymentApiUrl: string | null;
   tokenizationKey: string | null;
@@ -38,6 +40,7 @@ export class CheckoutConfigService {
     return {
       baseFee: BASE_FEE,
       deliveryFee: DELIVERY_FEE,
+      vatPercentage: VAT_PERCENTAGE,
       paymentPublicKey,
       paymentApiUrl,
       tokenizationKey,
