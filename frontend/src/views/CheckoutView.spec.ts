@@ -30,6 +30,7 @@ describe('CheckoutView', () => {
   const config = {
     baseFee: 2_000,
     deliveryFee: 8_000,
+    vatPercentage: 19,
     paymentPublicKey: 'pub_example',
     paymentApiUrl: 'https://payments.example',
     tokenizationKey: 'public-encryption-key',
@@ -41,7 +42,8 @@ describe('CheckoutView', () => {
   const approved = {
     reference: 'CHK-9fe5923f-7fef-4a5c-99fc-20db7464c774',
     status: 'APPROVED',
-    total: 110_000,
+    vatAmount: 19_000,
+    total: 129_000,
     quantity: 1,
     product: { id: product.id, name: product.name, stock: 1 },
     items: [
@@ -155,6 +157,8 @@ describe('CheckoutView', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(wrapper.text()).toContain('Resumen de pago')
+    expect(wrapper.text()).toContain('IVA (19%)')
+    expect(wrapper.text()).toContain('129.000')
     expect(wrapper.find('input[autocomplete="cc-number"]').exists()).toBe(false)
 
     await button(wrapper, 'Confirmar pago').trigger('click')

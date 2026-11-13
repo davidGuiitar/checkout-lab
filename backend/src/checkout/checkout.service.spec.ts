@@ -31,9 +31,10 @@ describe('CheckoutService', () => {
     deliveryId: 'delivery-id',
     quantity: 2,
     productAmount: product.price * 2,
+    vatAmount: 38_000,
     baseFee: 2_000,
     deliveryFee: 8_000,
-    total: 210_000,
+    total: 248_000,
     providerTransactionId: null,
     failureReason: null,
     createdAt: new Date(),
@@ -154,7 +155,8 @@ describe('CheckoutService', () => {
       new CheckoutService(prisma, gateway).create(dto),
     ).resolves.toMatchObject({
       status: TransactionStatus.APPROVED,
-      total: 210_000,
+      total: 248_000,
+      vatAmount: 38_000,
       quantity: 2,
       product: { stock: 0 },
     });
@@ -167,7 +169,7 @@ describe('CheckoutService', () => {
       },
     });
     expect(createGatewayTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ amountInCents: 21_000_000 }),
+      expect.objectContaining({ amountInCents: 24_800_000 }),
     );
   });
 
@@ -353,7 +355,8 @@ describe('CheckoutService', () => {
       ...pendingTransaction,
       quantity: 3,
       productAmount: 250_000,
-      total: 260_000,
+      vatAmount: 47_500,
+      total: 307_500,
     });
     findLocalTransaction.mockResolvedValue({
       ...pendingTransaction,
@@ -372,7 +375,8 @@ describe('CheckoutService', () => {
       status: TransactionStatus.APPROVED,
       quantity: 3,
       productAmount: 250_000,
-      total: 260_000,
+      vatAmount: 47_500,
+      total: 307_500,
       product: secondProduct,
       items: [
         {
@@ -390,7 +394,8 @@ describe('CheckoutService', () => {
     await expect(
       new CheckoutService(prisma, gateway).create(cartDto),
     ).resolves.toMatchObject({
-      total: 260_000,
+      total: 307_500,
+      vatAmount: 47_500,
       quantity: 3,
       items: [
         { productId: secondProduct.id, quantity: 1 },

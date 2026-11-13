@@ -2,6 +2,7 @@ import {
   BASE_FEE,
   CheckoutConfigService,
   DELIVERY_FEE,
+  VAT_PERCENTAGE,
 } from './checkout-config.service';
 import { PaymentGateway } from './domain/payment-gateway.port';
 
@@ -27,6 +28,7 @@ describe('CheckoutConfigService', () => {
     await expect(service.getPublicConfig()).resolves.toEqual({
       baseFee: BASE_FEE,
       deliveryFee: DELIVERY_FEE,
+      vatPercentage: VAT_PERCENTAGE,
       paymentPublicKey: null,
       paymentApiUrl: null,
       tokenizationKey: null,
@@ -50,6 +52,7 @@ describe('CheckoutConfigService', () => {
     ).resolves.toEqual({
       baseFee: BASE_FEE,
       deliveryFee: DELIVERY_FEE,
+      vatPercentage: VAT_PERCENTAGE,
       paymentPublicKey: 'pub_test_example',
       paymentApiUrl: 'https://sandbox.example',
       tokenizationKey: 'public-encryption-key',

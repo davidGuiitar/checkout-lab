@@ -1,3 +1,4 @@
+// Tipos mínimos para Vuex: declara solo lo que usa esta aplicación.
 declare module 'vuex' {
   import type { App } from 'vue'
 

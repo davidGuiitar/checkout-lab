@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// Vista previa visual de la tarjeta; muestra el reverso al editar el CVC.
 import { computed } from 'vue'
 import { normalizeCardNumber, type CardBrand } from '../lib/payment-validators'
 
@@ -11,7 +12,9 @@ const props = defineProps<{
   showBack: boolean
 }>()
 
+// Clase CSS según la franquicia (visa, mastercard o generic).
 const brandClass = computed(() => props.brand?.toLowerCase() ?? 'generic')
+// Rellena con "•" hasta 16 dígitos y agrupa de a 4.
 const displayNumber = computed(() => {
   const digits = normalizeCardNumber(props.number).slice(0, 16)
   const padded = `${digits}${'•'.repeat(16 - digits.length)}`
@@ -21,6 +24,7 @@ const displayHolder = computed(
   () => props.holder.trim().toLocaleUpperCase('es-CO').slice(0, 26) || 'NOMBRE DEL TITULAR',
 )
 const displayExpiry = computed(() => props.expiry || 'MM/AA')
+// El CVC nunca se muestra; solo puntos.
 const displayCvc = computed(() => '•'.repeat(Math.max(3, props.cvc.length)))
 const brandMessage = computed(() => {
   if (!normalizeCardNumber(props.number)) return 'Ingresa el número para detectar la franquicia'

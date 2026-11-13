@@ -1,4 +1,4 @@
-import { createCheckoutStore } from './index'
+import { type CheckoutConfig, createCheckoutStore } from './index'
 
 describe('checkout store', () => {
   const product = {
@@ -13,6 +13,7 @@ describe('checkout store', () => {
   const config = {
     baseFee: 2_000,
     deliveryFee: 8_000,
+    vatPercentage: 19,
     paymentPublicKey: 'pub_example',
     paymentApiUrl: 'https://payments.example',
     tokenizationKey: 'public-key',
@@ -83,6 +84,22 @@ describe('checkout store', () => {
     expect(store.state.config).toEqual(config)
     expect(store.state.error).toBeNull()
     expect(store.state.isLoading).toBe(false)
+  })
+
+  it('uses 19% VAT when an older backend omits the percentage', () => {
+    const legacyConfig: Omit<CheckoutConfig, 'vatPercentage'> = {
+      baseFee: config.baseFee,
+      deliveryFee: config.deliveryFee,
+      paymentPublicKey: config.paymentPublicKey,
+      paymentApiUrl: config.paymentApiUrl,
+      tokenizationKey: config.tokenizationKey,
+      contracts: config.contracts,
+    }
+    const store = createCheckoutStore()
+
+    store.commit('setData', { products, config: legacyConfig })
+
+    expect(store.state.config.vatPercentage).toBe(19)
   })
 
   it('selects a product and preserves it when the catalog refreshes', () => {

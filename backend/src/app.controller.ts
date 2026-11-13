@@ -7,6 +7,7 @@ import { AppService } from './app.service';
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
+  /** Health check: permite verificar que la API está levantada. */
   @Get()
   @ApiOkResponse({ description: 'Estado de la API.' })
   getHello(): string {

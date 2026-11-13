@@ -8,6 +8,9 @@ import {
   PaymentStatus,
 } from '../domain/payment-gateway.port';
 
+// Formas (parciales) de las respuestas JSON de la pasarela. Todo es opcional
+// porque la respuesta se valida antes de usarse.
+
 interface MerchantResponse {
   data?: {
     presigned_acceptance?: {
@@ -46,6 +49,7 @@ interface TokenizationResponse {
   };
 }
 
+/** Estados reconocidos; cualquier otro valor se trata como respuesta inválida. */
 const PAYMENT_STATUSES = new Set<PaymentStatus>([
   'PENDING',
   'APPROVED',
@@ -54,12 +58,18 @@ const PAYMENT_STATUSES = new Set<PaymentStatus>([
   'ERROR',
 ]);
 
+/**
+ * Implementación del puerto PaymentGateway sobre la API HTTP de la pasarela.
+ * Usa la llave pública para operaciones del lado cliente y la privada solo
+ * para crear cobros.
+ */
 @Injectable()
 export class HttpPaymentGateway implements PaymentGateway {
   private readonly logger = new Logger(HttpPaymentGateway.name);
 
   constructor(private readonly config: ConfigService) {}
 
+  /** Obtiene los tokens y enlaces de los contratos de aceptación del comercio. */
   async getMerchantContracts(): Promise<MerchantContracts> {
     const publicKey = this.required('PAYMENT_PUBLIC_KEY');
     const response = await fetch(
@@ -89,6 +99,7 @@ export class HttpPaymentGateway implements PaymentGateway {
     };
   }
 
+  /** Crea un cobro con tarjeta tokenizada (requiere la llave privada). */
   async createTransaction(
     input: CreateGatewayTransaction,
   ): Promise<GatewayTransaction> {
@@ -112,6 +123,7 @@ export class HttpPaymentGateway implements PaymentGateway {
         payment_method_type: 'CARD',
         reference: input.reference,
         signature: input.signature,
+        // La IP del cliente es opcional; solo se envía si se conoce.
         ...(input.customerIp ? { ip: input.customerIp } : {}),
       }),
     });
@@ -119,6 +131,7 @@ export class HttpPaymentGateway implements PaymentGateway {
     return this.readTransaction(response);
   }
 
+  /** Obtiene la llave pública RSA con la que el navegador cifra la tarjeta. */
   async getTokenizationKey(): Promise<string> {
     const response = await fetch(`${this.baseUrl}/tokens/keys/tokenization`, {
       headers: {
@@ -136,6 +149,7 @@ export class HttpPaymentGateway implements PaymentGateway {
     return publicKey;
   }
 
+  /** Intercambia la tarjeta cifrada (JWE) por un token de un solo uso. */
   async tokenizeEncryptedCard(payload: string): Promise<string> {
     const response = await fetch(`${this.baseUrl}/tokens/cards`, {
       method: 'POST',
@@ -154,6 +168,7 @@ export class HttpPaymentGateway implements PaymentGateway {
     return token;
   }
 
+  /** Consulta el estado actual de una transacción en la pasarela. */
   async getTransaction(id: string): Promise<GatewayTransaction> {
     const response = await fetch(
       `${this.baseUrl}/transactions/${encodeURIComponent(id)}`,
@@ -166,10 +181,12 @@ export class HttpPaymentGateway implements PaymentGateway {
     return this.readTransaction(response);
   }
 
+  /** URL base de la pasarela, sin barra final. */
   private get baseUrl(): string {
     return this.required('PAYMENT_API_URL').replace(/\/$/, '');
   }
 
+  /** Lee una variable de entorno obligatoria o falla con 502. */
   private required(name: string): string {
     const value = this.config.get<string>(name);
     if (!value) {
@@ -178,6 +195,7 @@ export class HttpPaymentGateway implements PaymentGateway {
     return value;
   }
 
+  /** Valida la respuesta de una transacción y extrae id y estado. */
   private async readTransaction(
     response: Response,
   ): Promise<GatewayTransaction> {
@@ -191,6 +209,7 @@ export class HttpPaymentGateway implements PaymentGateway {
       !status ||
       !PAYMENT_STATUSES.has(status as PaymentStatus)
     ) {
+      // Log estructurado sin datos sensibles (solo tipo de error y campos).
       this.logger.warn(
         JSON.stringify({
           event: 'payment_gateway_transaction_rejected',
@@ -208,6 +227,7 @@ export class HttpPaymentGateway implements PaymentGateway {
     return { id, status: status as PaymentStatus };
   }
 
+  /** Parsea el cuerpo como JSON; devuelve null si no es JSON válido. */
   private async safeJson(response: Response): Promise<unknown> {
     try {
       return await response.json();
